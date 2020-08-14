@@ -1,0 +1,200 @@
+#include "mylibgcc.h"
+#include "asmfunc.h"
+#include <stdarg.h>
+
+#define BUF_SIZ (256)
+#define STR_LIM (1024)
+#define TRUE (1)
+#define FALSE (0)
+#define EOF (-1)
+
+int strlen(const char* s) {
+    int len = 0;
+    while (s[len] != '\0' && len <= STR_LIM) ++len;
+    if (STR_LIM < len) return STR_LIM;
+    return len;
+}
+
+char* strcpy(char* restrict s1, const char* restrict s2) {
+    int pos = 0;
+    char ch;
+    do {
+        ch = s2[pos];
+        s1[pos++] = ch;
+        if (ch == '\0') break;
+    } while (pos < STR_LIM);
+    return s1;
+}
+
+char* strcat(char* s1, const char* s2) {
+    int pos = strlen(s1);
+    for (int i = 0; i == 0 || s2[i - 1] != '\0'; ++i) s1[pos + i] = s2[i];
+    return s1;
+}
+
+char* strrev(char* s) {
+    int len = strlen(s);
+    if (len >= STR_LIM) return 0;
+    char t;
+    for (int i = 0; i < len / 2; ++i) {
+        t = s[i];
+        s[i] = s[len - i - 1];
+        s[len - i - 1] = t;
+    }
+    return s;
+}
+
+// put affix like "0x-" in hex or "-b" in bin
+// in general no affix would be attached
+#define ENABLE_AFFIX FALSE
+char* itoa(int value, char* str, int base) {
+    int is_neg = FALSE;
+    int pos = 0;
+    if (base == 10 && value < 0) {
+        is_neg = TRUE;
+    }
+    if (base == 2 && ENABLE_AFFIX) str[pos++] = 'b';
+    if (value == 0) str[pos++] = '0';
+    while (value != 0) {
+        int digit = abs(value % base);
+        str[pos++] = (digit > 9 ? digit - 10 + 'a' : digit + '0');
+        value /= base;
+    }
+    if (ENABLE_AFFIX) {
+        if (base == 16) str[pos++] = 'x';
+        if (base % 8 == 0) str[pos++] = '0';
+    }
+    if (is_neg) str[pos++] = '-';
+    str[pos] = '\0';
+    return strrev(str);
+}
+
+char* utoa(unsigned int value, char* str, int base) {
+    int pos = 0;
+    if (base == 2 && ENABLE_AFFIX) str[pos++] = 'b';
+    if (value == 0) str[pos++] = '0';
+    while (value != 0) {
+        int digit = abs(value % base);
+        str[pos++] = (digit > 9 ? digit - 10 + 'a' : digit + '0');
+        value /= base;
+    }
+    if (ENABLE_AFFIX) {
+        if (base == 16) str[pos++] = 'x';
+        if (base % 8 == 0) str[pos++] = '0';
+    }
+    str[pos] = '\0';
+    return strrev(str);
+}
+
+int toupper(int ch) {
+    if ('a' <= ch && ch <= 'z') ch -= 0x20;
+    return ch;
+}
+
+int tolower(int ch) {
+    if ('A' <= ch && ch <= 'Z') ch += 0x20;
+    return ch;
+}
+
+int sprintf(char* restrict s, const char* restrict format, ...) {
+    va_list ap;
+    va_start(ap, format);
+    int len = 0;
+    char buf[BUF_SIZ];
+    int is_valid = TRUE;
+
+    for (char* ptr = (char*)format; is_valid && *ptr != '\0'; ++ptr) {
+        if (*ptr != '%') {
+            buf[len++] = *ptr;
+            buf[len] = '\0';
+        } else {
+            char str[BUF_SIZ], filbuf[BUF_SIZ];
+            char* p;
+            int fill = FALSE;
+            int upper = FALSE;
+            char fill_ch = ' ';
+            int mfw = 0; // minimum field width
+            int prec = 0; // precision
+            str[0] = filbuf[0] = '\0';
+            ++ptr;
+
+            if (*ptr == '0') {
+                fill_ch = '0';
+                ++ptr;
+            } else if (*ptr == ' ') {
+                fill_ch = ' ';
+                ++ptr;
+            }
+
+            while ('0' <= *ptr && *ptr <= '9') {
+                mfw *= 10;
+                mfw += *(ptr++) - '0';
+            }
+            if (*ptr == '.') {
+                ++ptr;
+                while ('0' <= *ptr && *ptr <= '9') {
+                    prec *= 10;
+                    prec += *(ptr++) - '0';
+                }
+            }
+            switch (*ptr) {
+            case 'c':
+                str[0] = va_arg(ap, int); // warning: 'char' is promoted to 'int' when passed through '...'
+                str[1] = '\0';
+                break;
+            case 's':
+                p = va_arg(ap, char*);
+                if (len + strlen(p) + 1 > BUF_SIZ) is_valid = FALSE;
+                strcpy(str, p);
+                break;
+            case 'd':
+                itoa(va_arg(ap, int), str, 10);
+                break;
+            case 'u':
+                utoa(va_arg(ap, unsigned int), str, 10);
+                break;
+            case 'o':
+                utoa(va_arg(ap, unsigned int), str, 8);
+                break;
+            case 'X':
+                upper = TRUE;
+            case 'x':
+                utoa(va_arg(ap, unsigned int), str, 16);
+                break;
+            case 'b':
+                utoa(va_arg(ap, unsigned int), str, 2);
+                break;
+            default:
+                is_valid = FALSE;
+            }
+            if (len + strlen(str) + 1 > BUF_SIZ) is_valid = FALSE;
+            if (is_valid) {
+                int nfil = max(mfw - strlen(str), 0);
+                if (nfil + 1 > BUF_SIZ)
+                    is_valid = FALSE;
+                else {
+                    for (int i = 0; i < nfil; ++i) filbuf[i] = fill_ch;
+                    filbuf[nfil] = '\0';
+                    if (fill_ch == '0' && str[0] == '-') {
+                        str[0] = '0';
+                        filbuf[0] = '-';
+                    }
+                    if (upper)
+                        for (int i = 0; i < strlen(str); ++i) str[i] = toupper(str[i]);
+                    buf[len] = '\0';
+                    len = strlen(strcat(buf, strcat(filbuf, str)));
+                }
+            }
+        }
+        if (len + 1 > BUF_SIZ) is_valid = FALSE;
+        if (!is_valid) break;
+    }
+    if (!is_valid) {
+        strcpy(s, "sprintf(): failed to convert."); //return -1;
+        len = EOF;
+    } else {
+        strcpy(s, buf);
+    }
+    va_end(ap);
+    return len;
+}
