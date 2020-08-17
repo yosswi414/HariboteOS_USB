@@ -16,8 +16,10 @@ INT = interrupt
 QUE = fifo
 KBD = keyboard
 MOU = mouse
+MEM = memory
 
-OBJS = $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj font.obj
+OBJS = $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
+CFLAGS = -O2 -march=i486 -m32 -fno-pie -nostdlib -c
 
 DEL = rm -f
 # デフォルト動作
@@ -42,7 +44,7 @@ font.obj: hankaku.txt makefile
 	objcopy -I binary -O elf32-i386 -B i386 --redefine-sym _binary_font_bin_start=ascii font.bin font.obj
 
 %.obj : %.c makefile
-	$(CC) -O0 -march=i486 -m32 -fno-pie -nostdlib -c $*.c -o $*.obj
+	$(CC) $(CFLAGS) $*.c -o $*.obj
 
 $(BTP).bin : $(OBJS) $(LKS) makefile
 	ld -m elf_i386 -T $(LKS) $(OBJS) -o $(BTP).bin

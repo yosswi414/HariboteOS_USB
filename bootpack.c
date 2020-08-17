@@ -5,6 +5,8 @@
 #include "graphic.h"
 #include "interrupt.h"
 #include "mylibgcc.h"
+#include "memory.h"
+#include "general.h"
 
 int dbg_val[4];
 
@@ -18,6 +20,8 @@ void HariMain(void) {
     struct MOUSE_DEC mdec;
     char mcursor[256], buf[128], keybuf[32], mousebuf[3 * MOUSEBUF_SIZ];
     int mx, my;
+    uint memtotal;
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
 
     init_gdtidt();
     init_pic();
@@ -42,7 +46,21 @@ void HariMain(void) {
     putfonts8(binfo->vram, binfo->scrnx, 3, 1, COL8_848400, buf);
     putfonts8(binfo->vram, binfo->scrnx, 2, 0, COL8_FFFF00, buf);
 
-    sprintf(buf, "2020/08/14 15:38 JST");
+    boxfill8(binfo->vram, binfo->scrnx, COL8_000000, 300, 5, 302, 7);
+
+    memtotal = memtest(0x00400000, 0xbfffffff);
+    sprintf(buf, "Memory available: %d MB", memtotal >> 20);
+    putfonts8(binfo->vram, binfo->scrnx, 70, binfo->scrny - 21 - 22 - 16, COL8_000000, buf);
+    boxfill8(binfo->vram, binfo->scrnx, COL8_FFFFFF, 300, 5, 302, 7);
+
+    memman_init(memman);
+    memman_free(memman, 0x00001000, 0x0009e000);
+    memman_free(memman, 0x00400000, memtotal - 0x00400000);
+
+    sprintf(buf, "Free memory: %d KB", memman_total(memman) >> 10);
+    putfonts8(binfo->vram, binfo->scrnx, 70, binfo->scrny - 21 - 22, COL8_000000, buf);
+    
+    sprintf(buf, "2020/08/17 17:26 JST");
     putfonts8(binfo->vram, binfo->scrnx, 70, binfo->scrny - 21, COL8_000000, buf);
 
     for (;;) {

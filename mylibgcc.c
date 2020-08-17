@@ -1,5 +1,6 @@
 #include "mylibgcc.h"
 #include "asmfunc.h"
+#include "general.h"
 #include <stdarg.h>
 
 #define BUF_SIZ (256)
@@ -69,7 +70,7 @@ char* itoa(int value, char* str, int base) {
     return strrev(str);
 }
 
-char* utoa(unsigned int value, char* str, int base) {
+char* utoa(uint value, char* str, int base) {
     int pos = 0;
     if (base == 2 && ENABLE_AFFIX) str[pos++] = 'b';
     if (value == 0) str[pos++] = '0';
@@ -151,18 +152,18 @@ int sprintf(char* restrict s, const char* restrict format, ...) {
                 itoa(va_arg(ap, int), str, 10);
                 break;
             case 'u':
-                utoa(va_arg(ap, unsigned int), str, 10);
+                utoa(va_arg(ap, uint), str, 10);
                 break;
             case 'o':
-                utoa(va_arg(ap, unsigned int), str, 8);
+                utoa(va_arg(ap, uint), str, 8);
                 break;
             case 'X':
                 upper = TRUE;
             case 'x':
-                utoa(va_arg(ap, unsigned int), str, 16);
+                utoa(va_arg(ap, uint), str, 16);
                 break;
             case 'b':
-                utoa(va_arg(ap, unsigned int), str, 2);
+                utoa(va_arg(ap, uint), str, 2);
                 break;
             default:
                 is_valid = FALSE;

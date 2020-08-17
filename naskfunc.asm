@@ -13,6 +13,8 @@
 		GLOBAL	load_gdtr, load_idtr
 		GLOBAL	asm_inthandler21, asm_inthandler27, asm_inthandler2c
 		EXTERN	inthandler21, inthandler27, inthandler2c
+		GLOBAL	load_cr0, store_cr0
+		GLOBAL	memtest_sub
 
 [SECTION .text]
 
@@ -138,3 +140,44 @@ asm_inthandler2c:
 		POP		DS
 		POP		ES
 		IRETD
+
+load_cr0:		; int load_cr0(void);
+		MOV		EAX, CR0
+		RET
+store_cr0:		; void store_cr0(int cr0);
+		MOV		EAX, [ESP+4]
+		MOV		CR0, EAX
+		RET
+
+memtest_sub:	; unsigned int memtest_sub(unsigned int start, unsigned int end);
+		PUSH	EDI
+		PUSH	ESI
+		PUSH	EBX
+		MOV		ESI, 0xaa55aa55	; pat0
+		MOV		EDI, 0x55aa55aa	; pat1
+		MOV		EAX, [ESP+12+4]	; start
+_mts_loop:
+		MOV		EBX, EAX
+		ADD		EBX, 0xffc
+		MOV		EDX, [EBX]
+		MOV		[EBX], ESI
+		XOR		DWORD [EBX], 0xffffffff
+		CMP		EDI, [EBX]
+		JNE		_mts_fin
+		XOR		DWORD [EBX], 0xffffffff
+		CMP		ESI, [EBX]
+		JNE		_mts_fin
+		MOV		[EBX], EDX
+		ADD		EAX, 0x100000
+		CMP		EAX, [ESP+12+8]	; end
+		JBE		_mts_loop
+		POP		EBX
+		POP		ESI
+		POP		EDI
+		RET
+_mts_fin:
+		MOV		[EBX], EDX
+		POP		EBX
+		POP		ESI
+		POP		EDI
+		RET

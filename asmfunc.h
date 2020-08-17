@@ -1,7 +1,20 @@
 #ifndef _ASMFUNC_H_
 #define _ASMFUNC_H_
 
+#include "general.h"
+
 extern char ascii[0x1000];
+
+#define ADDR_BOOTINFO 0x0ff0
+
+struct BOOTINFO {
+    unsigned char cyls; // how far the data on the disk is loaded to boot sector
+    unsigned char leds; // the state of keyboard LED when boot
+    unsigned char vmode; // video mode: decide n-bit color
+    unsigned char reserve;
+    short scrnx, scrny;
+    unsigned char* vram;
+};
 
 void io_hlt(void);
 void io_cli(void);
@@ -20,16 +33,8 @@ void load_idtr(int limit, int addr);
 void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
-
-struct BOOTINFO {
-    unsigned char cyls; // how far the data on the disk is loaded to boot sector
-    unsigned char leds; // the state of keyboard LED when boot
-    unsigned char vmode; // video mode: decide n-bit color
-    unsigned char reserve;
-    short scrnx, scrny;
-    unsigned char* vram;
-};
-
-#define ADDR_BOOTINFO 0x0ff0
+int load_cr0(void);
+void store_cr0(int cr0);
+uint memtest_sub(uint start, uint end);
 
 #endif
