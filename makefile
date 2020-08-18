@@ -17,9 +17,10 @@ QUE = fifo
 KBD = keyboard
 MOU = mouse
 MEM = memory
+SHT = sheet
 
-OBJS = $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
-CFLAGS = -O2 -march=i486 -m32 -fno-pie -nostdlib -c
+OBJS = $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
+CFLAGS = -O2 -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
 
 DEL = rm -f
 # デフォルト動作

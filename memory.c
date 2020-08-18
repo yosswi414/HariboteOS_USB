@@ -1,7 +1,6 @@
 #include "memory.h"
 #include "asmfunc.h"
 #include "general.h"
-#include "mylibgcc.h"
 
 uint memtest(uint start, uint end) {
     char flg486 = 0;
@@ -83,7 +82,7 @@ uint memman_alloc(struct MEMMAN* man, uint size) {
             man->free[i].addr += size;
             man->free[i].size -= size;
             if (man->free[i].size == 0) {
-                --man->frees;
+                man->frees--;
                 for (; i < man->frees; ++i) man->free[i] = man->free[i + 1];
             }
             return a;
@@ -101,7 +100,7 @@ int memman_free(struct MEMMAN* man, uint addr, uint size) {
         man->free[i - 1].size += size;
         if (i < man->frees && addr + size == man->free[i].addr) {
             man->free[i - 1].size += man->free[i].size;
-            --man->frees;
+            man->frees--;
             for (; i < man->frees; ++i) man->free[i] = man->free[i + 1];
         }
         return 0;
@@ -125,4 +124,12 @@ int memman_free(struct MEMMAN* man, uint addr, uint size) {
     ++man->losts;
     man->lostsize += size;
     return -1;
+}
+
+uint memman_alloc_4k(struct MEMMAN* man, uint size) {
+    return memman_alloc(man, (size + 0xfff) & 0xfffff000);
+}
+
+int memman_free_4k(struct MEMMAN* man, uint addr, uint size) {
+    return memman_free(man, addr, (size + 0xfff) & 0xfffff000);
 }

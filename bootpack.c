@@ -2,66 +2,79 @@
 #include "desctable.h"
 #include "device.h"
 #include "fifo.h"
+#include "general.h"
 #include "graphic.h"
 #include "interrupt.h"
-#include "mylibgcc.h"
 #include "memory.h"
-#include "general.h"
+#include "mylibgcc.h"
+#include "sheet.h"
 
 int dbg_val[4];
 
 extern struct FIFO8 keyfifo;
 extern struct FIFO8 mousefifo;
 
+#define KEYBDBUF_SIZ 32
 #define MOUSEBUF_SIZ 32
 
 void HariMain(void) {
     struct BOOTINFO* binfo = (struct BOOTINFO*)ADDR_BOOTINFO;
     struct MOUSE_DEC mdec;
-    char mcursor[256], buf[128], keybuf[32], mousebuf[3 * MOUSEBUF_SIZ];
+    char buf[128], keybuf[KEYBDBUF_SIZ], mousebuf[3 * MOUSEBUF_SIZ];
     int mx, my;
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+    struct SHTCTL* shtctl;
+    struct SHEET *sht_back, *sht_mouse;
+    unsigned char *buf_back, buf_mouse[256];
 
     init_gdtidt();
     init_pic();
     io_sti(); // remove a prohibition of interrupt since IDT/PIC initialization has finished
-    fifo8_init(&keyfifo, 32, keybuf);
-    fifo8_init(&mousefifo, 3 * 32, mousebuf);
+    fifo8_init(&keyfifo, KEYBDBUF_SIZ, keybuf);
+    fifo8_init(&mousefifo, 3 * MOUSEBUF_SIZ, mousebuf);
     io_out8(PIC0_IMR, 0xf9); // accept interrupt by IRQ1, IRQ2
     io_out8(PIC1_IMR, 0xef); // accept interrupt by IRQ12
     init_keyboard();
-    for (int i = 0; i < 128; ++i) buf[i] = 0;
-
-    init_palette();
-    init_screen(binfo->vram, binfo->scrnx, binfo->scrny);
-    mx = (binfo->scrnx - 16) / 2;
-    my = (binfo->scrny - 28 - 16) / 2;
-    init_mouse_cursor8(mcursor, COL8_008484);
-    putblock8_8(binfo->vram, binfo->scrnx, 16, 16, mx, my, mcursor, 16);
-
     enable_mouse(&mdec);
-
-    sprintf(buf, "Current progress: Day 09");
-    putfonts8(binfo->vram, binfo->scrnx, 3, 1, COL8_848400, buf);
-    putfonts8(binfo->vram, binfo->scrnx, 2, 0, COL8_FFFF00, buf);
-
-    boxfill8(binfo->vram, binfo->scrnx, COL8_000000, 300, 5, 302, 7);
+    //for (int i = 0; i < 128; ++i) buf[i] = 0;
 
     memtotal = memtest(0x00400000, 0xbfffffff);
-    sprintf(buf, "Memory available: %d MB", memtotal >> 20);
-    putfonts8(binfo->vram, binfo->scrnx, 70, binfo->scrny - 21 - 22 - 16, COL8_000000, buf);
-    boxfill8(binfo->vram, binfo->scrnx, COL8_FFFFFF, 300, 5, 302, 7);
-
     memman_init(memman);
     memman_free(memman, 0x00001000, 0x0009e000);
     memman_free(memman, 0x00400000, memtotal - 0x00400000);
 
-    sprintf(buf, "Free memory: %d KB", memman_total(memman) >> 10);
-    putfonts8(binfo->vram, binfo->scrnx, 70, binfo->scrny - 21 - 22, COL8_000000, buf);
-    
-    sprintf(buf, "2020/08/17 17:26 JST");
-    putfonts8(binfo->vram, binfo->scrnx, 70, binfo->scrny - 21, COL8_000000, buf);
+    init_palette();
+    shtctl = shtctl_init(memman, binfo->vram, binfo->scrnx, binfo->scrny);
+    sht_back = sheet_alloc(shtctl);
+    sht_mouse = sheet_alloc(shtctl);
+    buf_back = (unsigned char*)memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
+    sheet_setbuf(sht_back, buf_back, binfo->scrnx, binfo->scrny, -1);
+    sheet_setbuf(sht_mouse, buf_mouse, 16, 16, 99);
+
+    init_screen(buf_back, binfo->scrnx, binfo->scrny);
+    init_mouse_cursor8(buf_mouse, 99);
+
+    sheet_slide(shtctl, sht_back, 0, 0);
+    sheet_updown(shtctl, sht_back, 0);
+
+    mx = (binfo->scrnx - 16) / 2;
+    my = (binfo->scrny - 28 - 16) / 2;
+    sheet_slide(shtctl, sht_mouse, mx, my);
+    sheet_updown(shtctl, sht_mouse, 1);
+
+    sprintf(buf, "Current progress: Day 10");
+    putfonts8(buf_back, binfo->scrnx, 1, 1, COL8_848400, buf);
+    putfonts8(buf_back, binfo->scrnx, 0, 0, COL8_FFFF00, buf);
+    sprintf(buf, "Available memory : %d KB", memtotal >> 10);
+    putfonts8(buf_back, binfo->scrnx, 0, 17, COL8_FFFFFF, buf);
+    sprintf(buf, "Free memory      : %d KB", memman_total(memman) >> 10);
+    putfonts8(buf_back, binfo->scrnx, 0, 33, COL8_FFFFFF, buf);
+
+    sprintf(buf, "2020/08/18 19:15 JST");
+    putfonts8(buf_back, binfo->scrnx, 70, binfo->scrny - 21, COL8_000000, buf);
+
+    sheet_refresh(shtctl, sht_back, 0, 0, binfo->scrnx, binfo->scrny);
 
     for (;;) {
         io_cli();
@@ -71,43 +84,32 @@ void HariMain(void) {
             if (fifo8_status(&keyfifo)) {
                 int dat = fifo8_get(&keyfifo);
                 io_sti();
-                boxfill8(binfo->vram, binfo->scrnx, COL8_008484, 0, 16, 100, 47);
-                sprintf(buf, "%02X", dat);
-                putfonts8(binfo->vram, binfo->scrnx, 0, 16, COL8_FFFFFF, buf);
-                sprintf(buf, "%08b", dat);
-                putfonts8(binfo->vram, binfo->scrnx, 0, 32, COL8_FFFFFF, buf);
+                boxfill8(buf_back, binfo->scrnx, COL8_008484, 0, 49, 16 * 11 - 1, 64);
+                sprintf(buf, "%02X %08b", dat, dat);
+                putfonts8(buf_back, binfo->scrnx, 0, 49, COL8_FFFFFF, buf);
+                sheet_refresh(shtctl, sht_back, 0, 49, 16 * 11 - 1, 64);
             } else if (fifo8_status(&mousefifo)) {
                 int dat = fifo8_get(&mousefifo);
                 io_sti();
                 if (mouse_decode(&mdec, dat)) {
-                    boxfill8(binfo->vram, binfo->scrnx, COL8_008484, 32, 48, 180, 111);
-
+                    boxfill8(buf_back, binfo->scrnx, COL8_008484, 0, 65, 16 * 8 - 1, 128);
                     sprintf(buf, "[lcr]");
                     if (mdec.btn & 0x01) buf[1] = 'L';
                     if (mdec.btn & 0x02) buf[3] = 'R';
                     if (mdec.btn & 0x04) buf[2] = 'C';
-                    putfonts8(binfo->vram, binfo->scrnx, 32, 48, COL8_FFFFFF, buf);
+                    putfonts8(buf_back, binfo->scrnx, 0, 65, COL8_FFFFFF, buf);
                     sprintf(buf, "%02X %02X %02X", mdec.buf[0], mdec.buf[1], mdec.buf[2]);
-                    putfonts8(binfo->vram, binfo->scrnx, 32, 64, COL8_FFFFFF, buf);
+                    putfonts8(buf_back, binfo->scrnx, 0, 81, COL8_FFFFFF, buf);
                     sprintf(buf, "que:[%3d]", (mousefifo.size - mousefifo.free) / 3);
-                    putfonts8(binfo->vram, binfo->scrnx, 32, 80, COL8_FFFFFF, buf);
-                    sprintf(buf, "%s", (mousefifo.size - mousefifo.free) / 3 >= MOUSEBUF_SIZ ? "Buffer Overflow!" : "");
-                    putfonts8(binfo->vram, binfo->scrnx, 32, 96, COL8_FFFFFF, buf);
+                    putfonts8(buf_back, binfo->scrnx, 0, 97, COL8_FFFFFF, buf);
+                    sprintf(buf, "%s", ((mousefifo.size - mousefifo.free) / 3 >= MOUSEBUF_SIZ - 1) ? "BufOvflw" : "");
+                    putfonts8(buf_back, binfo->scrnx, 0, 113, COL8_FFFFFF, buf);
+                    sheet_refresh(shtctl, sht_back, 0, 65, 16 * 8 - 1, 128);
 
                     // move mouse cursor
-
-                    // delete existing cursor on screen
-                    boxfill8(binfo->vram, binfo->scrnx, COL8_008484, mx, my, mx + 15, my + 15);
-                    mx += mdec.x;
-                    my += mdec.y;
-                    mx = max(mx, 0);
-                    my = max(my, 0);
-                    mx = min(mx, binfo->scrnx - 16);
-                    my = min(my, binfo->scrny - 16);
-                    sprintf(buf, "(%3d, %3d)", mx, my);
-                    boxfill8(binfo->vram, binfo->scrnx, COL8_008484, 0, 0, 79, 15);
-                    putfonts8(binfo->vram, binfo->scrnx, 0, 0, COL8_FFFFFF, buf);
-                    putblock8_8(binfo->vram, binfo->scrnx, 16, 16, mx, my, mcursor, 16);
+                    mx = clamp(mx + mdec.x, 0, binfo->scrnx - 16);
+                    my = clamp(my + mdec.y, 0, binfo->scrny - 16);
+                    sheet_slide(shtctl, sht_mouse, mx, my);
                 }
             }
         }
