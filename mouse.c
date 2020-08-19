@@ -20,7 +20,7 @@ int mouse_decode(struct MOUSE_DEC* mdec, unsigned char dat) {
         break;
     case 1:
         mdec->buf[0] = dat;
-        mdec->phase = 2;
+        if((dat&0x08)&&!(dat&0xc0))mdec->phase = 2;
         break;
     case 2:
         mdec->buf[1] = dat;
