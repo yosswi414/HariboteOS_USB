@@ -19,8 +19,9 @@ MOU = mouse
 MEM = memory
 SHT = sheet
 WND = window
+TIM = timer
 
-OBJS = $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
+OBJS = $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
 CFLAGS = -O2 -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
 
 DEL = rm -f
@@ -45,7 +46,16 @@ font.obj: hankaku.txt makefile
 	../HariboteOS_img/tolset/z_tools/makefont.exe hankaku.txt font.bin
 	objcopy -I binary -O elf32-i386 -B i386 --redefine-sym _binary_font_bin_start=ascii font.bin font.obj
 
-%.obj : %.c makefile
+$(KBD).obj : $(KBD).c device.h makefile
+	$(CC) $(CFLAGS) $(KBD).c -o $(KBD).obj
+
+$(MOU).obj : $(MOU).c device.h makefile
+	$(CC) $(CFLAGS) $(MOU).c -o $(MOU).obj
+
+$(BTP).obj : $(BTP).c makefile
+	$(CC) $(CFLAGS) $(BTP).c -o $(BTP).obj
+
+%.obj : %.c %.h makefile
 	$(CC) $(CFLAGS) $*.c -o $*.obj
 
 $(BTP).bin : $(OBJS) $(LKS) makefile

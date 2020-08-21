@@ -8,20 +8,32 @@
 #include "memory.h"
 #include "mylibgcc.h"
 #include "sheet.h"
+#include "timer.h"
 #include "window.h"
 
 int dbg_val[4];
+char ENABLE_TIMECNT = FALSE;
 
 extern struct FIFO8 keyfifo;
 extern struct FIFO8 mousefifo;
+extern struct TIMERCTL timerctl;
 
 #define KEYBDBUF_SIZ 32
 #define MOUSEBUF_SIZ 32
 
+void disable_time() {
+    ENABLE_TIMECNT = FALSE;
+}
+void enable_time() {
+    ENABLE_TIMECNT = TRUE;
+}
+
 void HariMain(void) {
     struct BOOTINFO* binfo = (struct BOOTINFO*)ADDR_BOOTINFO;
     struct MOUSE_DEC mdec;
-    char buf[128], keybuf[KEYBDBUF_SIZ], mousebuf[3 * MOUSEBUF_SIZ];
+    struct FIFO8 timerfifo[3];
+    char buf[128], keybuf[KEYBDBUF_SIZ], mousebuf[3 * MOUSEBUF_SIZ], timerbuf[3][8];
+    struct TIMER* timer[3];
     int mx, my;
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
@@ -34,10 +46,13 @@ void HariMain(void) {
     io_sti(); // remove a prohibition of interrupt since IDT/PIC initialization has finished
     fifo8_init(&keyfifo, KEYBDBUF_SIZ, keybuf);
     fifo8_init(&mousefifo, 3 * MOUSEBUF_SIZ, mousebuf);
-    io_out8(PIC0_IMR, 0xf9); // accept interrupt by IRQ1, IRQ2
+
+    init_pit();
+    io_out8(PIC0_IMR, 0xf8); // accept interrupt by IRQ0-2
     io_out8(PIC1_IMR, 0xef); // accept interrupt by IRQ12
     init_keyboard();
     enable_mouse(&mdec);
+
     //for (int i = 0; i < 128; ++i) buf[i] = 0;
 
     memtotal = memtest(0x00400000, 0xbfffffff);
@@ -72,7 +87,7 @@ void HariMain(void) {
     sheet_updown(sht_win, 1);
     sheet_updown(sht_mouse, 2);
 
-    sprintf(buf, "Current progress: Day 11");
+    sprintf(buf, "Current progress: Day 12");
     putfonts8(buf_back, binfo->scrnx, 1, 1, COL8_848400, buf);
     putfonts8(buf_back, binfo->scrnx, 0, 0, COL8_FFFF00, buf);
     sprintf(buf, "kadai yaba~i");
@@ -83,20 +98,29 @@ void HariMain(void) {
     sprintf(buf, "Free memory      : %d KB", memman_total(memman) >> 10);
     putfonts8(buf_back, binfo->scrnx, 0, 33, COL8_FFFFFF, buf);
 
-    sprintf(buf, "2020/08/19 15:27 JST");
+    sprintf(buf, "2020/08/21 12:32 JST");
     putfonts8(buf_back, binfo->scrnx, 70, binfo->scrny - 21, COL8_000000, buf);
 
     sheet_refresh(sht_back, 0, 0, binfo->scrnx, binfo->scrny);
 
-    uint cnt = 0;
+    int timeitv[] = { 1000, 300, 50 };
+    for (int i = 0; i < 3; ++i) {
+        fifo8_init(&timerfifo[i], 8, timerbuf[i]);
+        timer[i] = timer_alloc();
+        timer_init(timer[i], &timerfifo[i], 1);
+        timer_settime(timer[i], timeitv[i]);
+    }
+    ENABLE_TIMECNT = TRUE;
+
     for (;;) {
         io_cli();
-        ++cnt;
-        sprintf(buf, "%010d", cnt);
+        sprintf(buf, "%10d", timerctl.count);
         boxfill8(buf_win, 160, COL8_C6C6C6, 40, 28, 40 + 8 * 10 - 1, 43);
         putfonts8(buf_win, 160, 40, 28, COL8_000000, buf);
         sheet_refresh(sht_win, 40, 28, 120, 44);
-        if (fifo8_status(&keyfifo) + fifo8_status(&mousefifo) == 0)
+
+        if (fifo8_status(&keyfifo) + fifo8_status(&mousefifo) + fifo8_status(&timerfifo[0]) + fifo8_status(&timerfifo[1]) + fifo8_status(&timerfifo[2])
+            == 0)
             io_sti();
         else {
             if (fifo8_status(&keyfifo)) {
@@ -108,8 +132,8 @@ void HariMain(void) {
                 sheet_refresh(sht_back, 0, 49, 16 * 11 - 1, 64);
             } else if (fifo8_status(&mousefifo)) {
                 int dat = fifo8_get(&mousefifo);
+                io_sti();
                 if (mouse_decode(&mdec, dat)) {
-                    io_sti();
                     boxfill8(buf_back, binfo->scrnx, COL8_008484, 0, 65, 8 * 9 - 1, 128);
                     sprintf(buf, "[lcr]");
                     if (mdec.btn & 0x01) buf[1] = 'L';
@@ -128,12 +152,28 @@ void HariMain(void) {
                     mx = clamp(mx + mdec.x, 0, binfo->scrnx - 1);
                     my = clamp(my + mdec.y, 0, binfo->scrny - 1);
                     sheet_slide(sht_mouse, mx, my);
-                } else
-                    io_sti();
+                }
+            } else {
+                if (fifo8_status(&timerfifo[0])) {
+                    int dat = fifo8_get(&timerfifo[0]);
+                    putfonts8(buf_back, binfo->scrnx, 0, 128, COL8_FFFFFF, "10");
+                    sheet_refresh(sht_back, 0, 128, 8 * 2, 144);
+                }
+                if (fifo8_status(&timerfifo[1])) {
+                    int dat = fifo8_get(&timerfifo[1]);
+                    putfonts8(buf_back, binfo->scrnx, 8 * 2, 128, COL8_FFFFFF, " 3");
+                    sheet_refresh(sht_back, 8 * 2, 128, 8 * 4, 144);
+                }
+                if (fifo8_status(&timerfifo[2])) {
+                    int dat = fifo8_get(&timerfifo[2]);
+                    timer_init(timer[2], NULL, !dat);
+                    timer_settime(timer[2], timeitv[2]);
+                    boxfill8(buf_win, 160, dat ? COL8_000000 : COL8_C6C6C6, 24 + 8 * 12, 28 + 16, 24 + 8 * 13 - 1, 28 + 32 - 1);
+                    sheet_refresh(sht_win, 24 + 8 * 12, 28 + 16, 24 + 8 * 13 - 1, 28 + 32 - 1);
+                }
+                io_sti();
             }
         }
     }
-
-    while (1) io_hlt();
     return;
 }

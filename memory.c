@@ -1,6 +1,6 @@
 #include "memory.h"
 #include "asmfunc.h"
-#include "general.h"
+#include "mylibgcc.h"
 
 uint memtest(uint start, uint end) {
     char flg486 = 0;

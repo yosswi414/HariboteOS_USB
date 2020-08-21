@@ -1,6 +1,6 @@
 #include "sheet.h"
-#include "general.h"
 #include "memory.h"
+#include "mylibgcc.h"
 
 struct SHTCTL* shtctl_init(struct MEMMAN* memman, unsigned char* vram, int xsize, int ysize) {
     struct SHTCTL* ctl;

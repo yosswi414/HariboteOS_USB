@@ -1,13 +1,9 @@
 #include "mylibgcc.h"
 #include "asmfunc.h"
 #include "general.h"
-#include <stdarg.h>
 
 #define BUF_SIZ (256)
 #define STR_LIM (1024)
-#define TRUE (1)
-#define FALSE (0)
-#define EOF (-1)
 
 int strlen(const char* s) {
     int len = 0;
@@ -111,7 +107,7 @@ int sprintf(char* restrict s, const char* restrict format, ...) {
         } else {
             char str[BUF_SIZ], filbuf[BUF_SIZ];
             char* p;
-            int fill = FALSE;
+            //int fill = FALSE;
             int upper = FALSE;
             char fill_ch = ' ';
             int mfw = 0; // minimum field width
