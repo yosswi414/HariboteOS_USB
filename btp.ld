@@ -3,7 +3,7 @@ ENTRY(HariMain);
 SECTIONS
 {
     .head 0x0 : {
-        LONG(64 * 1024)  /*  0 : stack+.data+heap の大きさ（4KBの倍数） */
+        LONG(32 * 4 * 1024)  /*  0 : stack+.data+heap の大きさ（4KBの倍数） */
         LONG(0x69726148)      /*  4 : シグネチャ "Hari" */
         LONG(0)               /*  8 : mmarea の大きさ（4KBの倍数） */
         LONG(0x310000)        /* 12 : スタック初期値＆.data転送先 */
@@ -17,12 +17,14 @@ SECTIONS
     .text : {
         *(.text)
         KEEP(*(.note.*))
+        *(.text.unlikely)
     }
 
     .data 0x310000 : AT ( ADDR(.text) + SIZEOF(.text) ) {
         *(.data)
         *(.rodata*)
         *(.bss)
+        *(.stack)
     }
 
     /DISCARD/ : { *(.eh_frame) }

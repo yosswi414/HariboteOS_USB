@@ -1,6 +1,8 @@
 #ifndef _GRAPHIC_H_
 #define _GRAPHIC_H_
 
+#include "sheet.h"
+
 void init_palette(void);
 void set_palette(int start, int end, unsigned char* rgb);
 void boxfill8(unsigned char* vram, int xsize, unsigned char c, int x0, int y0, int x1, int y1);
@@ -9,6 +11,7 @@ void putfont8(unsigned char* vram, int xsize, int x, int y, char c, char* font);
 void putfonts8(unsigned char* vram, int xsize, int x, int y, char c, unsigned char* s);
 void init_mouse_cursor8(char* mouse, char bc);
 void putblock8_8(char* vram, int vxsize, int pxsize, int pysize, int px0, int py0, char* buf, int bxsize);
+void putfonts8_sht(struct SHEET* sht, int x, int y, int c, int b, char* s, int l);
 
 #define COL8_000000 0
 #define COL8_FF0000 1

@@ -19,14 +19,15 @@
 #define TIMER_FLAGS_USING 2
 
 struct TIMER {
+    struct TIMER* next;
     uint timeout, flags;
-    struct FIFO8* fifo;
-    unsigned char data;
+    struct FIFO32* fifo;
+    int data;
 };
 
 struct TIMERCTL {
-    uint count, next, using;
-    struct TIMER* timers[MAX_TIMER];
+    uint count, next;
+    struct TIMER* t0;
     struct TIMER timers0[MAX_TIMER];
 };
 
@@ -34,7 +35,8 @@ void init_pit(void);
 void inthandler20(int* esp);
 struct TIMER* timer_alloc(void);
 void timer_free(struct TIMER* timer);
-void timer_init(struct TIMER* timer, struct FIFO8* fifo, unsigned char data);
+void timer_init(struct TIMER* timer, struct FIFO32* fifo, int data);
 void timer_settime(struct TIMER* timer, uint timeout);
+void timer_adjust();
 
 #endif

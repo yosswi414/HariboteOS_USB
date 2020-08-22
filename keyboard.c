@@ -4,12 +4,16 @@
 #include "interrupt.h"
 
 void wait_KBC_sendready(void) {
-    for (;;)
-        if ((io_in8(PORT_KEYSTA) & KEYSTA_SEND_NOTREADY) == 0) break;
+    while (io_in8(PORT_KEYSTA) & KEYSTA_SEND_NOTREADY) { }
     return;
 }
 
-void init_keyboard(void) {
+struct FIFO32* key_fifo;
+int key_offset;
+
+void init_keyboard(struct FIFO32* fifo, int data0) {
+    key_fifo = fifo;
+    key_offset = data0;
     wait_KBC_sendready();
     io_out8(PORT_KEYCMD, KEYCMD_WRITE_MODE);
     wait_KBC_sendready();
@@ -18,12 +22,11 @@ void init_keyboard(void) {
 }
 
 // interrupt from PS/2 keyboard
-struct FIFO8 keyfifo;
 
 void inthandler21(int* esp) {
-    unsigned char data;
+    int data;
     io_out8(PIC0_OCW2, 0x61); // notify PIC that IRQ01 has been accepted
     data = io_in8(PORT_KEYDAT); // receive key code
-    fifo8_put(&keyfifo, data);
+    fifo32_put(key_fifo, data + key_offset);
     return;
 }
