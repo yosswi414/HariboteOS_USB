@@ -1,4 +1,12 @@
 
+VBEMODE	EQU		0x105
+	; VESA VBE video modes
+	; http://www.faqs.org/faqs/pc-hardware-faq/supervga-programming/
+	;0x101				; 640 x 480 x 8bit color
+	;0x103				; 800 x 600 x 8bit color
+	;0x105				; 1024 x 768 x 8bit color
+	;0x107				; 1280 x 1024 x 8bit color
+	;0x11B				; 1280 x 1024 x 32bit color
 
 BOTPAK	EQU		0x00280000		; where bootpack will be loaded
 DSKCAC	EQU		0x00100000		; address of disk cache
@@ -13,19 +21,64 @@ SCRNY	EQU		0x0ff6			; screen x
 VRAM	EQU		0x0ff8			; initial point of graphic buffer
 
 	ORG		0xc200
-	
-; configure video mode
 
-	MOV		AL, [vmd]
-	MOV		AH, 0x00
-	INT		0x10				; AH 0x00 : change video mode
+; check if VBE is available
+	MOV		AX, 0x9000
+	MOV		ES, AX
+	MOV		DI, 0
+	MOV		AX, 0x4f00
+	INT		0x10
+	CMP		AX, 0x004f
+	JNE		scrn320
+
+; check VBE version
+	MOV		AX, [ES:DI+4]
+	CMP		AX, 0x0200
+	JB		scrn320				; if (AX < 0x0200) goto scrn320;
+
+; get video mode information
+	MOV		CX, VBEMODE
+	MOV		AX, 0x4f01
+	INT		0x10
+	CMP		AX, 0x004f
+	JNE		scrn320
 	
-	MOV		BYTE [VMODE], 8		; record video mode
+; verify video mode information
+	CMP		BYTE [ES:DI + 0x19], 8	; 8: number of colors
+	JNE		scrn320
+
+	CMP		BYTE [ES:DI + 0x1b], 4	; 4: palette mode
+	JNE		scrn320
+
+	MOV		AX, [ES:DI + 0x00]
+	AND		AX, 0x0080			; bit-7 should be 1
+	JZ		scrn320
+
+; switch video mode
+	MOV		BX, VBEMODE + 0x4000
+	MOV		AX, 0x4f02
+	INT		0x10
+
+; save video mode
+	MOV		BYTE [VMODE], 8
+	MOV		AX, [ES:DI + 0x12]
+	MOV		[SCRNX], AX
+	MOV		AX, [ES:DI + 0x14]
+	MOV		[SCRNY], AX
+	MOV		EAX, [ES:DI + 0x28]
+	MOV		[VRAM], EAX
+	JMP		keystatus
+
+scrn320:
+	MOV		AX, 0x0013			; VGA graphics, 320 x 200 x 8bit color
+	INT		0x10
+	MOV		BYTE [VMODE], 8
 	MOV		WORD [SCRNX], 320
 	MOV		WORD [SCRNY], 200
 	MOV		DWORD [VRAM], 0x000a0000
 
 ; get keyboard LED state
+keystatus:
 	MOV		AH, 0x02
 	INT		0x16				; AH=0x02 : get keylock & shift state
 	MOV		[LEDS], AL			; AL <- state code
@@ -170,12 +223,5 @@ msg_end:
 	DB		0
 chclr:
 	DW		0x000f
-vmd:
-	DB		0x13				; VGA graphics, 320 x 200 x 8 bit color, packed pixel
-								; VRAM : 0xa0000 ~ 0xaffff
-	;DB		0x03				; text with 16 colors, 80 x 25
-	;DB		0x12				; VGA graphics, 640 x 480 x 4 bit color, unique planar
-	;DB		0x6a				; extended VGA graphics, 800 x 600 x 4 bit color, unique planar*
-								; * depends on graphic card
 
 bootpack:
