@@ -16,6 +16,8 @@
 		GLOBAL	load_cr0, store_cr0
 		GLOBAL	memtest_sub
 
+		GLOBAL	load_tr, farjmp
+
 [SECTION .text]
 
 io_hlt:	; void io_hlt(void);
@@ -196,4 +198,12 @@ _mts_fin:
 		POP		EBX
 		POP		ESI
 		POP		EDI
+		RET
+
+load_tr:		; void load_tr(int tr);
+		LTR		[ESP+4]
+		RET
+
+farjmp:			; void farjmp(int eip, int cs);
+		JMP		FAR [ESP+4]
 		RET

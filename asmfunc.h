@@ -37,5 +37,7 @@ void asm_inthandler2c(void);
 int load_cr0(void);
 void store_cr0(int cr0);
 uint memtest_sub(uint start, uint end);
+void load_tr(int tr);
+void farjmp(int eip, int cs);
 
 #endif

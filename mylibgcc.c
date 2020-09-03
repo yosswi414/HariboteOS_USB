@@ -93,6 +93,7 @@ int tolower(int ch) {
     return ch;
 }
 
+// available format: %c, %d, %u, %o, %X, %x, %b
 int sprintf(char* restrict s, const char* restrict format, ...) {
     va_list ap;
     va_start(ap, format);

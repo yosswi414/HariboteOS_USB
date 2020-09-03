@@ -3,6 +3,7 @@
 #include "fifo.h"
 #include "general.h"
 #include "interrupt.h"
+#include "mtask.h"
 
 extern int dbg_val[4];
 struct TIMERCTL timerctl;
@@ -28,7 +29,11 @@ void init_pit(void) {
     return;
 }
 
+extern struct TIMER* mt_timer;
+
 void inthandler20(int* esp) {
+    char ts = 0;
+
     io_out8(PIC0_OCW2, 0x60); // ACK
     if (!ENABLE_TIMECNT) return;
     timerctl.count++;
@@ -36,10 +41,14 @@ void inthandler20(int* esp) {
     struct TIMER* timer;
     for (timer = timerctl.t0; timer->timeout <= timerctl.count; timer = timer->next) {
         timer->flags = TIMER_FLAGS_ALLOC;
-        fifo32_put(timer->fifo, timer->data);
+        if(timer != mt_timer)
+            fifo32_put(timer->fifo, timer->data);
+        else
+            ts = 1;
     }
     timerctl.t0 = timer;
     timerctl.next = timerctl.t0->timeout;
+    if (ts) mt_taskswitch();
     return;
 }
 

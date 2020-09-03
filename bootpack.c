@@ -10,6 +10,9 @@
 #include "sheet.h"
 #include "timer.h"
 #include "window.h"
+#include "mtask.h"
+
+void task_b_main(struct SHEET* sht_back);
 
 int dbg_val[4];
 
@@ -21,6 +24,8 @@ extern char ENABLE_TIMECNT;
 #define KEYBDBUF_SIZ 32
 #define MOUSEBUF_SIZ 3
 #define FIFO_SIZ 0x80
+#define INTV_SWITCH_TASK 2 // switch task in every 20 msec.
+#define DATA_SWITCH_TASK 2
 
 void HariMain(void) {
     struct BOOTINFO* binfo = (struct BOOTINFO*)ADDR_BOOTINFO;
@@ -28,13 +33,17 @@ void HariMain(void) {
     struct FIFO32 fifo;
     char buf[128];
     int fifobuf[FIFO_SIZ];
-    struct TIMER* timer[3];
+    struct TIMER* timer[4];
+    struct TIMER* timer_ts;
     int mx, my;
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct SHTCTL* shtctl;
     struct SHEET *sht_back, *sht_mouse, *sht_win, *sht_win_key;
     unsigned char *buf_back, buf_mouse[256], *buf_win, *buf_win_key;
+
+    struct TSS32 tss_a, tss_b;
+    struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
 
     init_gdtidt();
     init_pic();
@@ -87,7 +96,7 @@ void HariMain(void) {
     sheet_updown(sht_win_key, 2);
     sheet_updown(sht_mouse, 4);
 
-    sprintf(buf, "Current progress: Day 14");
+    sprintf(buf, "Current progress: Day 15");
     putfonts8(buf_back, binfo->scrnx, 1, 1, COL8_848400, buf);
     putfonts8(buf_back, binfo->scrnx, 0, 0, COL8_FFFF00, buf);
     sprintf(buf, "kadai yaba~i");
@@ -100,7 +109,7 @@ void HariMain(void) {
     sprintf(buf, "Free memory      : %d KB", memman_total(memman) >> 10);
     putfonts8_sht(sht_back, 0, 33, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
 
-    sprintf(buf, "2020/08/23 18:15 JST");
+    sprintf(buf, "2020/09/04 06:13 JST");
     putfonts8_sht(sht_back, 70, sht_back->bysize - 21, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
 
     sprintf(buf, "size: %d x %d", sht_back->bxsize, sht_back->bysize);
@@ -109,7 +118,7 @@ void HariMain(void) {
     sprintf(buf, "test text here");
     putfonts8_sht(sht_win_key, 10, 25, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
 
-// 20 x 8
+    // 32 x 8
 #define maxline 8
 #define maxchar 32
     make_textbox8(sht_win_key, 10, 25 + 32, 8 * maxchar, 16 * maxline, COL8_FFFFFF);
@@ -121,21 +130,39 @@ void HariMain(void) {
     char lshift = FALSE, rshift = FALSE;
 
     int timeitv[]
-        = { 1000, 300, 50 };
-    int timedat[] = { 10, 3, 1 };
-    for (int i = 0; i < 3; ++i) {
+        = { 1000, 300, 50, 1 };
+    int timedat[] = { 10, 3, 1, 5 };
+    for (int i = 0; i < 4; ++i) {
         timer[i] = timer_alloc();
         timer_init(timer[i], &fifo, timedat[i]);
         timer_settime(timer[i], timeitv[i]);
     }
+
+    timer_ts = timer_alloc();
+    timer_init(timer_ts, &fifo, DATA_SWITCH_TASK);
+    timer_settime(timer_ts, INTV_SWITCH_TASK);
+    tss_a.ldtr = tss_b.ldtr = 0;
+    tss_a.iomap = tss_b.iomap = 0x40000000;
+    set_segmdesc(gdt + 3, 103, (int)&tss_a, AR_TSS32);
+    set_segmdesc(gdt + 4, 103, (int)&tss_b, AR_TSS32);
+    load_tr(3 * 8);
+    int task_b_esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
+    tss_b.eip = (int)&task_b_main;
+    tss_b.eflags = 0x00000202; // IF = 1
+    tss_b.eax = tss_b.ecx = tss_b.edx = tss_b.ebx = 0;
+    tss_b.esp = task_b_esp;
+    tss_b.ebp = tss_b.esi = tss_b.edi = 0;
+    tss_b.es = 1 * 8;
+    tss_b.cs = 2 * 8;
+    tss_b.ss = tss_b.ds = tss_b.fs = tss_b.gs = 1 * 8;
+    *((int*)(task_b_esp + 4)) = (int)sht_back;
+    mt_init();
 
     // はい、よーいスタート
     ENABLE_TIMECNT = TRUE;
 
     for (;;) {
         io_cli();
-        sprintf(buf, "%10d", timerctl.count);
-        putfonts8_sht(sht_win, 40, 28, COL8_000000, COL8_C6C6C6, buf, 10);
         if (!fifo32_status(&fifo))
             io_stihlt();
         else {
@@ -213,10 +240,13 @@ void HariMain(void) {
                     if (mdec.btn & 0x01) {
                         sheet_updown(sht_win, 3);
                         sheet_slide(sht_win, mx - 80, my - 8);
-                    }
-                    else
+                    } else
                         sheet_updown(sht_win, 1);
                 }
+            } else if (data == 5) {
+                sprintf(buf, "%10d", timerctl.count);
+                putfonts8_sht(sht_win, 40, 28, COL8_000000, COL8_C6C6C6, buf, 10);
+                timer_settime(timer[3], 1);
             } else {
                 switch (data) {
                 case 10:
@@ -242,4 +272,61 @@ void HariMain(void) {
         }
     }
     return;
+}
+
+uint rand_xor(void) {
+    static uint y = 2463534242;
+    y = y ^ (y << 13);
+    y = y ^ (y >> 17);
+    return y = y ^ (y << 5);
+}
+
+void task_b_main(struct SHEET* sht_back) {
+    struct FIFO32 fifo;
+    struct TIMER *timer_ts, *timer_put, *timer_100;
+    int fifobuf[128];
+    char s[128];
+
+    fifo32_init(&fifo, 128, fifobuf);
+    timer_ts = timer_alloc();
+    timer_init(timer_ts, &fifo, DATA_SWITCH_TASK);
+    timer_settime(timer_ts, INTV_SWITCH_TASK);
+    timer_put = timer_alloc();
+    timer_init(timer_put, &fifo, 1);
+    timer_settime(timer_put, 1);
+    timer_100 = timer_alloc();
+    timer_init(timer_100, &fifo, 100);
+    timer_settime(timer_100, 100);
+
+    int start = -1, end;
+    for (int cnt=0;;++cnt) {
+        io_cli();
+        if (!fifo32_status(&fifo))
+            io_sti();
+        else {
+            int i = fifo32_get(&fifo);
+            io_sti();
+            if (i == 1) {
+                //sprintf(s, "%11u", rand_xor());
+                sprintf(s, "%11u", cnt);
+                putfonts8_sht(sht_back, 0, 320, COL8_FFFFFF, COL8_008484, s, 11);
+                timer_settime(timer_put, 1);
+            } else if(i==100){
+                if (start < 0) {
+                    sprintf(s, "counting...");
+                    putfonts8_sht(sht_back, 0, 320 + 16, COL8_FFFFFF, COL8_008484, s, strlen(s));
+                    timer_settime(timer_100, 100);
+                    start = cnt;
+                }
+                else{
+                    end = cnt;
+                    sprintf(s, "finished");
+                    putfonts8_sht(sht_back, 0, 320 + 32, COL8_FFFFFF, COL8_008484, s, strlen(s));
+                    sprintf(s, "1 sec incr: %11u", end - start);
+                    putfonts8_sht(sht_back, 0, 320 + 48, COL8_FFFFFF, COL8_008484, s, strlen(s));
+                }
+
+            }
+        }
+    }
 }
