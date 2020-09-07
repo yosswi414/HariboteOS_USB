@@ -1,7 +1,7 @@
 #include "window.h"
 #include "graphic.h"
 
-void make_window8(unsigned char* buf, int xsize, int ysize, char* title) {
+void make_window8(unsigned char* buf, int xsize, int ysize, char* title, char act) {
     static char closebtn[14][16] = {
         "OOOOOOOOOOOOOOO@",
         "OQQQQQQQQQQQQQ$@",
@@ -19,6 +19,12 @@ void make_window8(unsigned char* buf, int xsize, int ysize, char* title) {
         "@@@@@@@@@@@@@@@@"
     };
 
+    char tc, tbc;
+    if (act)
+        tc = COL8_FFFFFF, tbc = COL8_000084;
+    else
+        tc = COL8_C6C6C6, tbc = COL8_848484;
+
     boxfill8(buf, xsize, COL8_C6C6C6, 0, 0, xsize - 1, 0);
     boxfill8(buf, xsize, COL8_FFFFFF, 1, 1, xsize - 2, 1);
     boxfill8(buf, xsize, COL8_C6C6C6, 0, 0, 0, ysize - 1);
@@ -26,10 +32,10 @@ void make_window8(unsigned char* buf, int xsize, int ysize, char* title) {
     boxfill8(buf, xsize, COL8_848484, xsize - 2, 1, xsize - 2, ysize - 2);
     boxfill8(buf, xsize, COL8_000000, xsize - 1, 0, xsize - 1, ysize - 1);
     boxfill8(buf, xsize, COL8_C6C6C6, 2, 2, xsize - 3, ysize - 3);
-    boxfill8(buf, xsize, COL8_000084, 3, 3, xsize - 4, 20);
+    boxfill8(buf, xsize, tbc, 3, 3, xsize - 4, 20);
     boxfill8(buf, xsize, COL8_848484, 1, ysize - 2, xsize - 2, ysize - 2);
     boxfill8(buf, xsize, COL8_000000, 0, ysize - 1, xsize - 1, ysize - 1);
-    putfonts8(buf, xsize, 24, 4, COL8_FFFFFF, title);
+    putfonts8(buf, xsize, 24, 4, tc, title);
 
     for (int y = 0; y < 14; y++) {
         for (int x = 0; x < 16; x++) {

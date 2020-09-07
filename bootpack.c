@@ -6,11 +6,11 @@
 #include "graphic.h"
 #include "interrupt.h"
 #include "memory.h"
+#include "mtask.h"
 #include "mylibgcc.h"
 #include "sheet.h"
 #include "timer.h"
 #include "window.h"
-#include "mtask.h"
 
 void task_b_main(struct SHEET* sht_back);
 
@@ -24,8 +24,6 @@ extern char ENABLE_TIMECNT;
 #define KEYBDBUF_SIZ 32
 #define MOUSEBUF_SIZ 3
 #define FIFO_SIZ 0x80
-#define INTV_SWITCH_TASK 2 // switch task in every 20 msec.
-#define DATA_SWITCH_TASK 2
 
 void HariMain(void) {
     struct BOOTINFO* binfo = (struct BOOTINFO*)ADDR_BOOTINFO;
@@ -33,22 +31,20 @@ void HariMain(void) {
     struct FIFO32 fifo;
     char buf[128];
     int fifobuf[FIFO_SIZ];
-    struct TIMER* timer[4];
-    struct TIMER* timer_ts;
+    struct TIMER* timer[2];
     int mx, my;
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct SHTCTL* shtctl;
-    struct SHEET *sht_back, *sht_mouse, *sht_win, *sht_win_key;
-    unsigned char *buf_back, buf_mouse[256], *buf_win, *buf_win_key;
+    struct SHEET *sht_back, *sht_mouse, *sht_win, *sht_win_key, *sht_win_b[3];
+    unsigned char *buf_back, buf_mouse[256], *buf_win, *buf_win_key, *buf_win_b;
 
-    struct TSS32 tss_a, tss_b;
-    struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
+    struct TASK *task_a, *task_b[3];
 
     init_gdtidt();
     init_pic();
     io_sti(); // remove a prohibition of interrupt since IDT/PIC initialization has finished
-    fifo32_init(&fifo, FIFO_SIZ, fifobuf);
+    fifo32_init(&fifo, FIFO_SIZ, fifobuf, NULL);
     init_keyboard(&fifo, KEYSIG_BIT);
     enable_mouse(&fifo, MOUSESIG_BIT, &mdec);
 
@@ -65,59 +61,69 @@ void HariMain(void) {
 
     init_palette();
     shtctl = shtctl_init(memman, binfo->vram, binfo->scrnx, binfo->scrny);
-    sht_back = sheet_alloc(shtctl);
-    sht_mouse = sheet_alloc(shtctl);
-    sht_win = sheet_alloc(shtctl);
-    sht_win_key = sheet_alloc(shtctl);
-    buf_back = (unsigned char*)memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
-    buf_win = (unsigned char*)memman_alloc_4k(memman, 160 * 68);
-    buf_win_key = (unsigned char*)memman_alloc_4k(memman, 320 * 200);
-    sheet_setbuf(sht_back, buf_back, binfo->scrnx, binfo->scrny, -1);
-    sheet_setbuf(sht_mouse, buf_mouse, 16, 16, 99);
-    sheet_setbuf(sht_win, buf_win, 160, 68, -1);
-    sheet_setbuf(sht_win_key, buf_win_key, 320, 200, -1);
+    task_a = task_init(memman);
+    fifo.task = task_a;
+    task_run(task_a, 1, 0);
 
+    sht_win_key = sheet_alloc(shtctl);
+
+    buf_win_key = (unsigned char*)memman_alloc_4k(memman, 320 * 200);
+
+    // sht_back
+    sht_back = sheet_alloc(shtctl);
+    buf_back = (unsigned char*)memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
+    sheet_setbuf(sht_back, buf_back, binfo->scrnx, binfo->scrny, -1);
     init_screen(buf_back, binfo->scrnx, binfo->scrny);
-    init_mouse_cursor8(buf_mouse, 99);
-    make_window8(buf_win, 160, 68, "window");
-    make_window8(buf_win_key, 320, 200, "keyboard");
+    {
+        sprintf(buf, "Current progress: Day 16");
+        putfonts8(buf_back, binfo->scrnx, 1, 1, COL8_848400, buf);
+        putfonts8(buf_back, binfo->scrnx, 0, 0, COL8_FFFF00, buf);
+        sprintf(buf, "kadai yaba~i");
+        putfonts8(buf_back, binfo->scrnx, 8 * 24 + 16 + 1, 1, COL8_840084, buf);
+        putfonts8(buf_back, binfo->scrnx, 8 * 24 + 16, 0, COL8_FF00FF, buf);
+        sheet_refresh(sht_back, 0, 0, binfo->scrnx, 20);
+
+        sprintf(buf, "Available memory : %d KB", memtotal >> 10);
+        putfonts8_sht(sht_back, 0, 17, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
+        sprintf(buf, "Free memory      : %d KB", memman_total(memman) >> 10);
+        putfonts8_sht(sht_back, 0, 33, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
+
+        sprintf(buf, "2020/09/08 07:15 JST");
+        putfonts8_sht(sht_back, 70, sht_back->bysize - 21, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
+
+        sprintf(buf, "size: %d x %d", sht_back->bxsize, sht_back->bysize);
+        putfonts8_sht(sht_back, sht_back->bxsize - 200, sht_back->bysize - 21, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
+    }
+
+    // sht_win_b
+    int task_b_priority[3] = { 1, 2, 3 };
+    for (int i = 0; i < 3; ++i) {
+        sht_win_b[i] = sheet_alloc(shtctl);
+        buf_win_b = (unsigned char*)memman_alloc_4k(memman, 144 * 52);
+        sheet_setbuf(sht_win_b[i], buf_win_b, 144, 52, -1);
+        sprintf(buf, "task_b%d", i);
+        make_window8(buf_win_b, 144, 52, buf, 0);
+        task_b[i] = task_alloc();
+        task_b[i]->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
+        task_b[i]->tss.eip = (int)&task_b_main;
+        task_b[i]->tss.es = 1 * 8;
+        task_b[i]->tss.cs = 2 * 8;
+        task_b[i]->tss.ss = task_b[i]->tss.ds = task_b[i]->tss.fs = task_b[i]->tss.gs = 1 * 8;
+        *((int*)(task_b[i]->tss.esp + 4)) = (int)sht_win_b[i];
+        task_run(task_b[i], 2, task_b_priority[i]);
+    }
+
+    // sht_win
+    sht_win = sheet_alloc(shtctl);
+    buf_win = (unsigned char*)memman_alloc_4k(memman, 160 * 68);
+    sheet_setbuf(sht_win, buf_win, 160, 68, -1);
+    make_window8(buf_win, 160, 68, "task_a", 1);
     //putfonts8(buf_win, 160, 24, 28, COL8_000000, "Welcome to");
     putfonts8(buf_win, 160, 24, 28 + 16, COL8_000000, "Haribote OS.");
 
-    sheet_slide(sht_back, 0, 0);
-    mx = (binfo->scrnx - 16) / 2;
-    my = (binfo->scrny - 28 - 16) / 2;
-    sheet_slide(sht_mouse, mx, my);
-    sheet_slide(sht_win, 80, 72);
-    sheet_slide(sht_win_key, 320, 200);
-
-    sheet_updown(sht_back, 0);
-    sheet_updown(sht_win, 1);
-    sheet_updown(sht_win_key, 2);
-    sheet_updown(sht_mouse, 4);
-
-    sprintf(buf, "Current progress: Day 15");
-    putfonts8(buf_back, binfo->scrnx, 1, 1, COL8_848400, buf);
-    putfonts8(buf_back, binfo->scrnx, 0, 0, COL8_FFFF00, buf);
-    sprintf(buf, "kadai yaba~i");
-    putfonts8(buf_back, binfo->scrnx, 8 * 24 + 16 + 1, 1, COL8_840084, buf);
-    putfonts8(buf_back, binfo->scrnx, 8 * 24 + 16, 0, COL8_FF00FF, buf);
-    sheet_refresh(sht_back, 0, 0, binfo->scrnx, 20);
-
-    sprintf(buf, "Available memory : %d KB", memtotal >> 10);
-    putfonts8_sht(sht_back, 0, 17, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
-    sprintf(buf, "Free memory      : %d KB", memman_total(memman) >> 10);
-    putfonts8_sht(sht_back, 0, 33, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
-
-    sprintf(buf, "2020/09/04 06:13 JST");
-    putfonts8_sht(sht_back, 70, sht_back->bysize - 21, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
-
-    sprintf(buf, "size: %d x %d", sht_back->bxsize, sht_back->bysize);
-    putfonts8_sht(sht_back, sht_back->bxsize - 200, sht_back->bysize - 21, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
-
-    sprintf(buf, "test text here");
-    putfonts8_sht(sht_win_key, 10, 25, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
-
+    // sht_win_key
+    sheet_setbuf(sht_win_key, buf_win_key, 320, 200, -1);
+    make_window8(buf_win_key, 320, 200, "keyboard", 0);
     // 32 x 8
 #define maxline 8
 #define maxchar 32
@@ -129,45 +135,50 @@ void HariMain(void) {
     int linech[maxline] = { 0 };
     char lshift = FALSE, rshift = FALSE;
 
+    sprintf(buf, "test text here");
+    putfonts8_sht(sht_win_key, 10, 25, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
+
+    // sht_mouse
+    sht_mouse = sheet_alloc(shtctl);
+    sheet_setbuf(sht_mouse, buf_mouse, 16, 16, 99);
+    init_mouse_cursor8(buf_mouse, 99);
+    mx = (binfo->scrnx - 16) / 2;
+    my = (binfo->scrny - 28 - 16) / 2;
+
+    sheet_slide(sht_back, 0, 0);
+    sheet_slide(sht_mouse, mx, my);
+    sheet_slide(sht_win, 80, 72);
+    sheet_slide(sht_win_key, 320, 200);
+    sheet_slide(sht_win_b[0], 168, 56);
+    sheet_slide(sht_win_b[1], 8, 116);
+    sheet_slide(sht_win_b[2], 168, 116);
+
+    sheet_updown(sht_back, 0);
+    sheet_updown(sht_win_key, 1);
+    for (int i = 0; i < 3; ++i) sheet_updown(sht_win_b[i], i + 2);
+    sheet_updown(sht_win, 5);
+    sheet_updown(sht_mouse, 6);
+
     int timeitv[]
-        = { 1000, 300, 50, 1 };
-    int timedat[] = { 10, 3, 1, 5 };
-    for (int i = 0; i < 4; ++i) {
+        = { 50, 2 };
+    int timedat[] = { 1, 5 };
+    for (int i = 0; i < 2; ++i) {
         timer[i] = timer_alloc();
         timer_init(timer[i], &fifo, timedat[i]);
         timer_settime(timer[i], timeitv[i]);
     }
-
-    timer_ts = timer_alloc();
-    timer_init(timer_ts, &fifo, DATA_SWITCH_TASK);
-    timer_settime(timer_ts, INTV_SWITCH_TASK);
-    tss_a.ldtr = tss_b.ldtr = 0;
-    tss_a.iomap = tss_b.iomap = 0x40000000;
-    set_segmdesc(gdt + 3, 103, (int)&tss_a, AR_TSS32);
-    set_segmdesc(gdt + 4, 103, (int)&tss_b, AR_TSS32);
-    load_tr(3 * 8);
-    int task_b_esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
-    tss_b.eip = (int)&task_b_main;
-    tss_b.eflags = 0x00000202; // IF = 1
-    tss_b.eax = tss_b.ecx = tss_b.edx = tss_b.ebx = 0;
-    tss_b.esp = task_b_esp;
-    tss_b.ebp = tss_b.esi = tss_b.edi = 0;
-    tss_b.es = 1 * 8;
-    tss_b.cs = 2 * 8;
-    tss_b.ss = tss_b.ds = tss_b.fs = tss_b.gs = 1 * 8;
-    *((int*)(task_b_esp + 4)) = (int)sht_back;
-    mt_init();
 
     // はい、よーいスタート
     ENABLE_TIMECNT = TRUE;
 
     for (;;) {
         io_cli();
-        if (!fifo32_status(&fifo))
-            io_stihlt();
-        else {
-            sprintf(buf, "fifo:[%3d]", fifo32_status(&fifo));
-            putfonts8_sht(sht_back, 0, 97, COL8_FFFFFF, COL8_008484, buf, 10);
+        if (!fifo32_status(&fifo)) {
+            task_sleep(task_a);
+            io_sti();
+        } else {
+            //sprintf(buf, "fifo:[%3d]", fifo32_status(&fifo));
+            //putfonts8_sht(sht_back, 0, 97, COL8_FFFFFF, COL8_008484, buf, 10);
             int data = fifo32_get(&fifo);
             io_sti();
             if (data & KEYSIG_BIT) {
@@ -246,19 +257,21 @@ void HariMain(void) {
             } else if (data == 5) {
                 sprintf(buf, "%10d", timerctl.count);
                 putfonts8_sht(sht_win, 40, 28, COL8_000000, COL8_C6C6C6, buf, 10);
-                timer_settime(timer[3], 1);
+                timer_settime(timer[1], 2);
             } else {
                 switch (data) {
+                /*
                 case 10:
                     putfonts8_sht(sht_back, 0, 128, COL8_FFFFFF, COL8_008484, "10", 2);
                     break;
                 case 3:
                     putfonts8_sht(sht_back, 8 * 2, 128, COL8_FFFFFF, COL8_008484, " 3", 2);
                     break;
+                */
                 case 0:
                 case 1:
-                    timer_init(timer[2], NULL, !data);
-                    timer_settime(timer[2], timeitv[2]);
+                    timer_init(timer[0], NULL, !data);
+                    timer_settime(timer[0], timeitv[0]);
                     cursor_c = data ? COL8_000000 : COL8_FFFFFF;
                     putfonts8_sht(sht_win_key, 10 + linech[cursor_l] * 8, 25 + 32 + cursor_l * 16, COL8_008484, cursor_c, " ", 1);
 
@@ -267,8 +280,8 @@ void HariMain(void) {
                     break;
                 }
             }
-            sprintf(buf, "fifo:[%3d]", fifo32_status(&fifo));
-            putfonts8_sht(sht_back, 0, 97, COL8_FFFFFF, COL8_008484, buf, 10);
+            //sprintf(buf, "fifo:[%3d]", fifo32_status(&fifo));
+            //putfonts8_sht(sht_back, 0, 97, COL8_FFFFFF, COL8_008484, buf, 10);
         }
     }
     return;
@@ -281,51 +294,29 @@ uint rand_xor(void) {
     return y = y ^ (y << 5);
 }
 
-void task_b_main(struct SHEET* sht_back) {
+void task_b_main(struct SHEET* sht_win_b) {
     struct FIFO32 fifo;
-    struct TIMER *timer_ts, *timer_put, *timer_100;
+    struct TIMER *timer_1sec;
     int fifobuf[128];
     char s[128];
 
-    fifo32_init(&fifo, 128, fifobuf);
-    timer_ts = timer_alloc();
-    timer_init(timer_ts, &fifo, DATA_SWITCH_TASK);
-    timer_settime(timer_ts, INTV_SWITCH_TASK);
-    timer_put = timer_alloc();
-    timer_init(timer_put, &fifo, 1);
-    timer_settime(timer_put, 1);
-    timer_100 = timer_alloc();
-    timer_init(timer_100, &fifo, 100);
-    timer_settime(timer_100, 100);
+    fifo32_init(&fifo, 128, fifobuf, NULL);
+    timer_1sec = timer_alloc();
+    timer_init(timer_1sec, &fifo, 100);
+    timer_settime(timer_1sec, 100);
 
-    int start = -1, end;
-    for (int cnt=0;;++cnt) {
+    for (int cnt = 0, cnt0 = 0;; ++cnt) {
         io_cli();
         if (!fifo32_status(&fifo))
             io_sti();
         else {
             int i = fifo32_get(&fifo);
             io_sti();
-            if (i == 1) {
-                //sprintf(s, "%11u", rand_xor());
-                sprintf(s, "%11u", cnt);
-                putfonts8_sht(sht_back, 0, 320, COL8_FFFFFF, COL8_008484, s, 11);
-                timer_settime(timer_put, 1);
-            } else if(i==100){
-                if (start < 0) {
-                    sprintf(s, "counting...");
-                    putfonts8_sht(sht_back, 0, 320 + 16, COL8_FFFFFF, COL8_008484, s, strlen(s));
-                    timer_settime(timer_100, 100);
-                    start = cnt;
-                }
-                else{
-                    end = cnt;
-                    sprintf(s, "finished");
-                    putfonts8_sht(sht_back, 0, 320 + 32, COL8_FFFFFF, COL8_008484, s, strlen(s));
-                    sprintf(s, "1 sec incr: %11u", end - start);
-                    putfonts8_sht(sht_back, 0, 320 + 48, COL8_FFFFFF, COL8_008484, s, strlen(s));
-                }
-
+            if (i == 100) {
+                sprintf(s, "%11u", cnt - cnt0);
+                putfonts8_sht(sht_win_b, 24, 28, COL8_000000, COL8_C6C6C6, s, strlen(s));
+                cnt0 = cnt;
+                timer_settime(timer_1sec, 100);
             }
         }
     }

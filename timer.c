@@ -9,13 +9,12 @@ extern int dbg_val[4];
 struct TIMERCTL timerctl;
 char ENABLE_TIMECNT = FALSE;
 
+// change interrupt period
+// *0x43 <- 0x34
+// *0x40 <- lower 8 bit of int. period
+// *0x40 <- upper 8 bit of int. period
+// if int. period is set 0, it will behave as set to 65536.
 void init_pit(void) {
-    // change interrupt period
-    // *0x43 <- 0x34
-    // *0x40 <- lower 8 bit of int. period
-    // *0x40 <- upper 8 bit of int. period
-    //    if int. period is set 0, it will
-    // be regarded as 65536.
     io_out8(PIT_CTRL, 0x34);
     io_out8(PIT_CNT0, (unsigned char)(TIMER_PERIOD & 0x00ff));
     io_out8(PIT_CNT0, (unsigned char)((TIMER_PERIOD & 0xff00) >> 8));
@@ -29,7 +28,8 @@ void init_pit(void) {
     return;
 }
 
-extern struct TIMER* mt_timer;
+// from mtask.c
+extern struct TIMER* task_timer;
 
 void inthandler20(int* esp) {
     char ts = 0;
@@ -41,14 +41,14 @@ void inthandler20(int* esp) {
     struct TIMER* timer;
     for (timer = timerctl.t0; timer->timeout <= timerctl.count; timer = timer->next) {
         timer->flags = TIMER_FLAGS_ALLOC;
-        if(timer != mt_timer)
+        if(timer != task_timer)
             fifo32_put(timer->fifo, timer->data);
         else
             ts = 1;
     }
     timerctl.t0 = timer;
     timerctl.next = timerctl.t0->timeout;
-    if (ts) mt_taskswitch();
+    if (ts) task_switch();
     return;
 }
 

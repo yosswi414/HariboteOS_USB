@@ -24,13 +24,6 @@ struct GATE_DESCRIPTOR {
     short offset_high;
 };
 
-// Task Status Segment
-struct TSS32{
-    int backlink, esp0, ss0, esp1, ss1, esp2, ss2, cr3;
-    int eip, eflags, eax, ecx, edx, ebx, esp, ebp, esi, edi;
-    int es, cs, ss, ds, fs, gs;
-    int ldtr, iomap;
-};
 
 void init_gdtidt(void);
 void set_segmdesc(struct SEGMENT_DESCRIPTOR* sd, unsigned int limit, int base, int ar);
