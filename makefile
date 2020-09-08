@@ -78,3 +78,8 @@ clean :
 	$(DEL) *.lst
 	$(DEL) *.img
 	$(DEL) *.sys
+
+evacuate :
+	git add ./*
+	git commit -m 'in case of loss of data'
+	git push origin master

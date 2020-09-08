@@ -6,7 +6,7 @@ struct TASKCTL* taskctl;
 struct TIMER* task_timer;
 
 struct TASK* task_init(struct MEMMAN* memman) {
-    struct TASK* task;
+    struct TASK* task, *idle;
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
     taskctl = (struct TASKCTL*)memman_alloc_4k(memman, sizeof(struct TASKCTL));
     for (int i = 0; i < MAX_TASKS; ++i) {
@@ -14,17 +14,28 @@ struct TASK* task_init(struct MEMMAN* memman) {
         taskctl->tasks0[i].sel = (TASK_GDT0 + i) << 3;
         set_segmdesc(gdt + TASK_GDT0 + i, 103, (int)&taskctl->tasks0[i].tss, AR_TSS32);
     }
+    for (int i = 0; i < MAX_TASK_LEVELS; ++i) {
+        taskctl->level[i].running = 0;
+        taskctl->level[i].now = 0;
+    }
     task = task_alloc();
     task->flags = TASK_STATE_RUNNING;
     task->priority = 2;
     task->level = 0;
     task_add(task);
     task_switchsub(); // setting level
-    //taskctl->running = 1;
-    //taskctl->tasks[taskctl->now = 0] = task;
     load_tr(task->sel);
     task_timer = timer_alloc();
     timer_settime(task_timer, task->priority);
+
+    idle = task_alloc();
+    idle->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024;
+    idle->tss.eip = (int)&task_idle;
+    idle->tss.es = 1 * 8;
+    idle->tss.cs = 2 * 8;
+    idle->tss.ss = idle->tss.ds = idle->tss.fs = idle->tss.gs = 1 * 8;
+    task_run(idle, MAX_TASK_LEVELS - 1, 1);
+
     return task;
 }
 
@@ -50,10 +61,10 @@ struct TASK* task_alloc(void) {
 void task_run(struct TASK* task, int level, int priority) {
     if (level < 0) level = task->level;
     if (priority > 0) task->priority = priority;
-    if(task->flags == TASK_STATE_RUNNING && task->level != level){
+    if (task->flags == TASK_STATE_RUNNING && task->level != level) {
         task_remove(task); // if removed flags will be WAITING
     }
-    if(task->flags != TASK_STATE_RUNNING){
+    if (task->flags != TASK_STATE_RUNNING) {
         // returning from sleep
         task->level = level;
         task_add(task);
@@ -66,7 +77,7 @@ void task_switch(void) {
     struct TASKLEVEL* tl = &taskctl->level[taskctl->now_lv];
     struct TASK *new_task, *now_task = tl->tasks[tl->now++];
     tl->now %= tl->running;
-    if(taskctl->lv_change){
+    if (taskctl->lv_change) {
         task_switchsub();
         tl = &taskctl->level[taskctl->now_lv];
     }
@@ -81,7 +92,7 @@ void task_sleep(struct TASK* task) {
     if (task->flags == TASK_STATE_RUNNING) {
         now_task = task_now();
         task_remove(task); // flags of task will be WAITING
-        if(task == now_task){
+        if (task == now_task) {
             task_switchsub();
             now_task = task_now();
             farjmp(0, now_task->sel);
@@ -114,10 +125,14 @@ void task_remove(struct TASK* task) {
     return;
 }
 
-void task_switchsub(void){
+void task_switchsub(void) {
     int i = 0;
     while (i < MAX_TASK_LEVELS && taskctl->level[i].running <= 0) ++i;
     taskctl->now_lv = i;
     taskctl->lv_change = FALSE;
     return;
+}
+
+void task_idle(void) {
+    while (TRUE) io_hlt();
 }
