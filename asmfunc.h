@@ -5,7 +5,8 @@
 
 extern char ascii[0x1000];
 
-#define ADDR_BOOTINFO 0x0ff0
+#define ADDR_BOOTINFO 0x00000ff0
+#define ADDR_DISKIMG 0x0100000
 
 struct BOOTINFO {
     unsigned char cyls; // how far the data on the disk is loaded to boot sector

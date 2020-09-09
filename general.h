@@ -19,5 +19,6 @@
 #define clamp(x, l, r) min(max(x, l), r)
 
 typedef unsigned int uint;
+typedef uint size_t;
 
 #endif

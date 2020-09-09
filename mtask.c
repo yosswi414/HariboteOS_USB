@@ -6,7 +6,7 @@ struct TASKCTL* taskctl;
 struct TIMER* task_timer;
 
 struct TASK* task_init(struct MEMMAN* memman) {
-    struct TASK* task, *idle;
+    struct TASK *task, *idle;
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
     taskctl = (struct TASKCTL*)memman_alloc_4k(memman, sizeof(struct TASKCTL));
     for (int i = 0; i < MAX_TASKS; ++i) {

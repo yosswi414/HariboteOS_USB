@@ -41,6 +41,23 @@ char* strrev(char* s) {
     return s;
 }
 
+// positive if s1 > s2, negative if s1 < s2, zero if equal
+int strcmp(const char* s1, const char* s2) {
+    for (int i = 0;; ++i) {
+        if (!s1[i] && !s2[i]) return 0;
+        if ((s1[i] && !s2[i]) || s1[i] > s2[i]) return 1;
+        if ((!s1[i] && s2[i]) || s1[i] < s2[i]) return -1;
+    }
+}
+
+int strncmp(const char* s1, const char* s2, size_t n) {
+    for (int i = 0; i < n; ++i) {
+        if ((s1[i] && !s2[i]) || s1[i] > s2[i]) return 1;
+        if ((!s1[i] && s2[i]) || s1[i] < s2[i]) return -1;
+    }
+    return 0;
+}
+
 // put affix like "0x-" in hex or "-b" in bin
 // in general no affix would be attached
 #define ENABLE_AFFIX FALSE
@@ -81,6 +98,28 @@ char* utoa(uint value, char* str, int base) {
     }
     str[pos] = '\0';
     return strrev(str);
+}
+
+int atoi(const char* str) {
+    int len = strlen(str);
+    int base = 10;
+    int u, r = 0, i = 0;
+    char neg = FALSE;
+    if (str[0] == '-') neg = TRUE, i++;
+    if (str[len - 1] == 'b' || str[len - 1] == 'B') {
+        base = 2;
+        len--;
+    } else if (str[0] == '0') {
+        base = 8, i++;
+        if (str[1] == 'x' || str[1] == 'X') base = 16, i++;
+    }
+    for (; i < len; ++i) {
+        if ('a' <= str[i] && str[i] <= 'f') u = str[i] - 'a' + 10;
+        else if ('A' <= str[i] && str[i] <= 'A') u = str[i] - 'A' + 10;
+        else u = str[i] - '0';
+        r = r * base + (neg ? -u : u);
+    }
+    return r;
 }
 
 int toupper(int ch) {

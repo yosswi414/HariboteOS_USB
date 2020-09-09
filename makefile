@@ -66,8 +66,12 @@ $(HRB) : $(ASH).bin $(BTP).bin makefile
 	cat $(ASH).bin $(BTP).bin > $(HRB)
 
 $(DST) : $(IPL) $(HRB) makefile
-	dd if=$(IPL) of=$(DST)
-	dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
+	mformat -f 1440 -C -B $(IPL) -i $@ ::
+	mcopy $(HRB) -i $@ ::
+	mcopy ipl.asm -i $@ ::
+	mcopy asmhead.asm -i $@ ::
+#dd if=$(IPL) of=$(DST)
+#dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
 
 img :
 	$(MAKE) $(DST)

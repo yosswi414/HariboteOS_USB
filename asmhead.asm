@@ -197,31 +197,31 @@ GDTR0:
 	
 	ALIGNB	16,	DB	0
 
-ending:
-	MOV		SI, msg_end
-	JMP		putloop_e
-fin:
-	HLT
-	JMP		fin
-putloop_e:
-	MOV		AL,[SI]
-	ADD		SI,1				; ++SI
-	CMP		AL,0
-	JE		fin
-	MOV		AH,0x0e
-	MOV		BX, [chclr]			; BX : color code
-	INT		0x10				; AH=0x0e : putchar()
-	JMP		putloop_e
-msg_end:
-	;DB		0x0d, 0x0a			; CR LF
-	DB		"Congrats! The pr"
-	DB		"ogram has been l"
-	DB		"oaded."
-	DB		0x0d, 0x0a			; CR LF
-	DB		"v:2020_0212_0000"
-	DB		0x0d, 0x0a			; CR LF
-	DB		0
-chclr:
-	DW		0x000f
+;ending:
+;	MOV		SI, msg_end
+;	JMP		putloop_e
+;fin:
+;	HLT
+;	JMP		fin
+;putloop_e:
+;	MOV		AL,[SI]
+;	ADD		SI,1				; ++SI
+;	CMP		AL,0
+;	JE		fin
+;	MOV		AH,0x0e
+;	MOV		BX, [chclr]			; BX : color code
+;	INT		0x10				; AH=0x0e : putchar()
+;	JMP		putloop_e
+;msg_end:
+;	;DB		0x0d, 0x0a			; CR LF
+;	DB		"Congrats! The pr"
+;	DB		"ogram has been l"
+;	DB		"oaded."
+;	DB		0x0d, 0x0a			; CR LF
+;	DB		"v:2020_0212_0000"
+;	DB		0x0d, 0x0a			; CR LF
+;	DB		0
+;chclr:
+;	DW		0x000f
 
 bootpack:

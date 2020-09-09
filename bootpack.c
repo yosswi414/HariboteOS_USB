@@ -1,11 +1,11 @@
 
-#define PROGRESS_CHAPTER 17
-#define PROGRESS_PAGE 355
+#define PROGRESS_CHAPTER 18
+#define PROGRESS_PAGE 371
 #define PROGRESS_YEAR 2020
 #define PROGRESS_MONTH 9
-#define PROGRESS_DAY 8
-#define PROGRESS_HOUR 17
-#define PROGRESS_MIN 50
+#define PROGRESS_DAY 9
+#define PROGRESS_HOUR 13
+#define PROGRESS_MIN 10
 
 #include "asmfunc.h"
 #include "desctable.h"
@@ -22,7 +22,8 @@
 #include "window.h"
 
 void task_b_main(struct SHEET* sht_back);
-void console_task(struct SHEET* sheet);
+void console_task(struct SHEET* sheet, int memtotal);
+int cons_newline(int cursor_y, struct SHEET* sheet);
 int dbg_val[4];
 
 extern struct FIFO8 keyfifo;
@@ -133,26 +134,27 @@ void HariMain(void) {
     my = (binfo->scrny - 28 - 16) / 2;
 
     // sht_cons
-    int cons_height = 256;
-    int cons_width = 165;
+    int cons_height = 480;
+    int cons_width = 640;
     struct SHEET* sht_cons;
     unsigned char* buf_cons;
     sht_cons = sheet_alloc(shtctl);
-    buf_cons = (unsigned char*)memman_alloc_4k(memman, cons_height * cons_width);
-    sheet_setbuf(sht_cons, buf_cons, cons_height, cons_width, -1);
-    make_window8(buf_cons, cons_height, cons_width, "console", 0);
-    make_textbox8(sht_cons, 8, 28, cons_height - 16, cons_width - 37, COL8_000000);
+    buf_cons = (unsigned char*)memman_alloc_4k(memman, cons_width * cons_height);
+    sheet_setbuf(sht_cons, buf_cons, cons_width, cons_height, -1);
+    make_window8(buf_cons, cons_width, cons_height, "console", 0);
+    make_textbox8(sht_cons, 8, 28, cons_width - 16, cons_height - 37, COL8_000000);
     struct TASK* task_cons = task_alloc();
-    task_cons->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 8;
+    task_cons->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 12;
     task_cons->tss.eip = (int)&console_task;
     task_cons->tss.es = 1 * 8;
     task_cons->tss.cs = 2 * 8;
     task_cons->tss.ss = task_cons->tss.ds = task_cons->tss.fs = task_cons->tss.gs = 1 * 8;
     *((int*)(task_cons->tss.esp + 4)) = (int)sht_cons;
+    *((int*)(task_cons->tss.esp + 8)) = memtotal;
     task_run(task_cons, 2, 2); // level = priority = 2
 
     sheet_slide(sht_back, 0, 0);
-    sheet_slide(sht_cons, 640, 480);
+    sheet_slide(sht_cons, 350, 100);
     sheet_slide(sht_win, 80, 72);
     sheet_slide(sht_mouse, mx, my);
 
@@ -172,8 +174,8 @@ void HariMain(void) {
     // はい、よーいスタート
     ENABLE_TIMECNT = TRUE;
 
-    //fifo32_put(&keycmd, KEYCMD_LED);
-    //fifo32_put(&keycmd, key_leds);
+    fifo32_put(&keycmd, KEYCMD_LED);
+    fifo32_put(&keycmd, key_leds);
 
     for (;;) {
         if (fifo32_status(&keycmd) > 0 && keycmd_wait < 0) {
@@ -255,10 +257,16 @@ void HariMain(void) {
                     if (data == 0x36) { // RShift
                         key_shift |= 2;
                     }
-                    if (data == 0x0f) { // TAB
+                    if (data == 0x0f) { // Tab
                         make_wtitle8(buf_win, sht_win->bxsize, "task_a", key_to);
                         make_wtitle8(buf_cons, sht_cons->bxsize, "console", !key_to);
+                        cursor_col = key_to ? COL8_000000 : -1;
+                        fifo32_put(&task_cons->fifo, 2 + key_to);
+                        if (!key_to)
+                            putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, COL8_FFFFFF, " ", 1);
+
                         key_to = 1 - key_to;
+
                         sheet_refresh(sht_win, 0, 0, sht_win->bxsize, 21);
                         sheet_refresh(sht_cons, 0, 0, sht_cons->bxsize, 21);
                     }
@@ -281,9 +289,8 @@ void HariMain(void) {
                     for (int l = 0; l < maxline; ++l) {
                         putfonts8_sht(sht_win, 10, 25 + 32 + l * 16, COL8_000000, COL8_FFFFFF, textbox[l], linech[l]);
                     }
-
-                    putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, cursor_col, " ", 1);
-                    sheet_refresh(sht_win, 0, 0, win_width, win_height);
+                    if (cursor_col >= 0)
+                        putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, cursor_col, " ", 1);
                 } else {
                     if (data == 0x2a) {
                         key_shift &= ~1;
@@ -291,9 +298,6 @@ void HariMain(void) {
                         key_shift &= ~2;
                     }
                 }
-
-                //boxfill8(sht_win->buf, sht_win->bxsize, cursor_col, linech[cursor_line] * 8, cursor_line * 16 + 25 + 32, linech[cursor_line] * 8 + 7, cursor_line * 16 + 25 + 32 + 15);
-                //sheet_refresh(sht_win, linech[cursor_line] * 8, cursor_line * 16 + 25 + 32, linech[cursor_line] * 8 + 8, cursor_line * 16 + 25 + 32 + 16);
             } else if (data & MOUSESIG_BIT) { // MOUSE
                 data &= ~MOUSESIG_BIT;
                 if (mouse_decode(&mdec, data)) {
@@ -325,21 +329,14 @@ void HariMain(void) {
                 }
             } else {
                 switch (data) {
-                /*
-                case 10:
-                    putfonts8_sht(sht_back, 0, 128, COL8_FFFFFF, COL8_008484, "10", 2);
-                    break;
-                case 3:
-                    putfonts8_sht(sht_back, 8 * 2, 128, COL8_FFFFFF, COL8_008484, " 3", 2);
-                    break;
-                */
                 case 0:
                 case 1:
-
                     timer_init(timer[0], NULL, !data);
                     timer_settime(timer[0], timeitv[0]);
-                    cursor_col = data ? COL8_000000 : COL8_FFFFFF;
-                    putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, cursor_col, " ", 1);
+                    if (cursor_col >= 0) {
+                        cursor_col = data ? COL8_000000 : COL8_FFFFFF;
+                        putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, cursor_col, " ", 1);
+                    }
 
                     sprintf(buf, "%d / %d", timerctl.next, timerctl.count);
                     putfonts8_sht(sht_back, 70, binfo->scrny - 45, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
@@ -347,8 +344,6 @@ void HariMain(void) {
                     break;
                 }
             }
-            //sprintf(buf, "fifo:[%3d]", fifo32_status(&fifo));
-            //putfonts8_sht(sht_back, 0, 97, COL8_FFFFFF, COL8_008484, buf, 10);
         }
     }
     return;
@@ -394,10 +389,21 @@ struct COORD {
     int col;
 };
 
-void console_task(struct SHEET* sheet) {
+struct FILEINFO {
+    unsigned char name[8], ext[3], type;
+    char reserve[10];
+    unsigned short time, date, clustno;
+    unsigned int size;
+};
+
+void console_task(struct SHEET* sheet, int memtotal) {
     struct TIMER* timer;
     struct TASK* task = task_now();
-    char buf[128];
+    char buf[128], cmdline[30];
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+    struct FILEINFO* finfo = (struct FILEINFO*)(0x8000 + 0x2600); //(ADDR_DISKIMG + 0x002600);
+
+    int width = (sheet->bxsize - 8 - 1) / 8 - 2, height = (sheet->bysize - 28 - 1) / 16 - 1;
 
     int fifobuf[128];
     fifo32_init(&task->fifo, sizeof(fifobuf) / sizeof(int), fifobuf, task);
@@ -406,7 +412,7 @@ void console_task(struct SHEET* sheet) {
     timer_settime(timer, 50);
 
     struct COORD cursor;
-    cursor.col = COL8_000000;
+    cursor.col = -1;
     cursor.x = 1;
     cursor.y = 0;
 
@@ -422,10 +428,14 @@ void console_task(struct SHEET* sheet) {
             io_sti();
             if (data <= 1) { // timer for cursor
                 timer_init(timer, &task->fifo, 1 - data);
-                cursor.col = data ? COL8_FFFFFF : COL8_000000;
+                if (cursor.col >= 0) cursor.col = data ? COL8_FFFFFF : COL8_000000;
                 timer_settime(timer, 50);
-                boxfill8(sheet->buf, sheet->bxsize, cursor.col, cursor.x * 8 + 8, cursor.y * 16 + 28, cursor.x * 8 + 15, cursor.y * 16 + 43);
-                sheet_refresh(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, cursor.x * 8 + 16, cursor.y * 16 + 44);
+                putfonts8_sht(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, COL8_008484, cursor.col, " ", 1);
+            }
+            if (data == 2) cursor.col = COL8_FFFFFF;
+            if (data == 3) {
+                cursor.col = -1;
+                putfonts8_sht(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, COL8_008484, COL8_000000, " ", 1);
             }
             if (data & KEYSIG_BIT) {
                 data &= ~KEYSIG_BIT;
@@ -434,17 +444,210 @@ void console_task(struct SHEET* sheet) {
                         putfonts8_sht(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, " ", 1);
                         cursor.x--;
                     }
+                } else if (data == '\n') {
+                    putfonts8_sht(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, " ", 1);
+                    cmdline[cursor.x - 1] = '\0';
+                    //putfonts8_sht(sheet, 20, 20, COL8_FF0000, COL8_008484, cmdline, strlen(cmdline));
+                    cursor.y = cons_newline(cursor.y, sheet);
+
+                    if (!strcmp(cmdline, "mem")) {
+                        sprintf(buf, "total %d MB", memtotal / (1 << 20));
+                        putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                        cursor.y = cons_newline(cursor.y, sheet);
+                        sprintf(buf, "free  %d KB", memman_total(memman) / (1 << 10));
+                        putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                        cursor.y = cons_newline(cursor.y, sheet);
+                        //cursor.y = cons_newline(cursor.y, sheet);
+                    } else if (!strcmp(cmdline, "clear") || !strcmp(cmdline, "cls")) {
+                        for (int y = 28; y < 28 + height * 16; ++y)
+                            for (int x = 8; x < 8 + width * 8; ++x) sheet->buf[x + y * sheet->bxsize] = COL8_000000;
+                        sheet_refresh(sheet, 8, 28, 8 + width * 8, 28 + height * 16);
+                        cursor.y = 0;
+                    } else if (!strcmp(cmdline, "ls") || !strcmp(cmdline, "dir")) {
+                        for (int x = 0; x < 224; ++x) {
+                            if (finfo[x].name[0] == 0x00) {
+                                sprintf(buf, "No further file found.");
+                                putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                                cursor.y = cons_newline(cursor.y, sheet);
+                                break;
+                            }
+                            if (finfo[x].name[0] != 0xe5) {
+                                if ((finfo[x].type & 0x18) == 0) {
+                                    sprintf(buf, "filename.ext   %7d", finfo[x].size);
+                                    for (int y = 0; y < 8; y++) {
+                                        buf[y] = finfo[x].name[y];
+                                    }
+                                    buf[9] = finfo[x].ext[0];
+                                    buf[10] = finfo[x].ext[1];
+                                    buf[11] = finfo[x].ext[2];
+                                    putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                                    cursor.y = cons_newline(cursor.y, sheet);
+                                }
+                            }
+                        }
+                    } else if (!strncmp(cmdline, "dump ", 5)) {
+                        //strcpy(buf, (char*)finfo);
+                        //int i = 0;
+                        //do {
+                        //    ++i;
+                        //    buf[i] = cmdline[i + 5];
+                        //} while (cmdline[i]);
+
+                        strcpy(buf, cmdline + 5);
+                        int addr = atoi(buf);
+
+                        char nullch = ',';
+                        //while (*((unsigned char*)addr) == 0) addr += 0x100;
+                        for (int t = 0; t < 16; ++t, addr += 0x10) {
+                            buf[0] = '\"';
+                            for (int k = 0; k < 16; ++k) {
+                                buf[k + 1] = *((unsigned char*)addr + k);
+                                if (!buf[k + 1]) buf[k + 1] = nullch;
+                                //sprintf(buf, "[%c](%02x)", *((unsigned char*)addr + k), *((unsigned char*)addr + k));
+                            }
+                            buf[17] = '\"';
+                            buf[18] = '\0';
+                            putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                            cursor.y = cons_newline(cursor.y, sheet);
+                        }
+                        sprintf(buf, "[begin: 0x%08x - end:0x%08x, null=\'%c\']", addr - 0x100, addr, nullch);
+                        putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                        cursor.y = cons_newline(cursor.y, sheet);
+
+                    } else if (!strncmp(cmdline, "fump ", 5)) {
+                        //strcpy(buf, (char*)finfo);
+                        //int i = 0;
+                        //do {
+                        //    ++i;
+                        //    buf[i] = cmdline[i + 5];
+                        //} while (cmdline[i]);
+
+                        strcpy(buf, cmdline + 5);
+                        int addr = atoi(buf);
+
+                        char nullch = ',';
+                        //while (*((unsigned char*)addr) == 0) addr += 0x100;
+                        for (int t = 0; t < 16; ++t, addr += 0x100) {
+                            buf[0] = '\"';
+                            for (int k = 0; k < 16; ++k) {
+                                buf[k + 1] = *((unsigned char*)addr + k);
+                                if (!buf[k + 1]) buf[k + 1] = nullch;
+                                //sprintf(buf, "[%c](%02x)", *((unsigned char*)addr + k), *((unsigned char*)addr + k));
+                            }
+                            buf[17] = '\"';
+                            buf[18] = '\0';
+                            putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                            cursor.y = cons_newline(cursor.y, sheet);
+                        }
+                        sprintf(buf, "[begin: 0x%08x - end:0x%08x, null=\'%c\']", addr - 0x1000, addr, nullch);
+                        putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                        cursor.y = cons_newline(cursor.y, sheet);
+
+                    } else if (!strncmp(cmdline, "ffmp ", 5)) {
+                        //strcpy(buf, (char*)finfo);
+                        //int i = 0;
+                        //do {
+                        //    ++i;
+                        //    buf[i] = cmdline[i + 5];
+                        //} while (cmdline[i]);
+
+                        strcpy(buf, cmdline + 5);
+                        int addr = atoi(buf);
+
+                        char nullch = ',';
+                        //while (*((unsigned char*)addr) == 0) addr += 0x100;
+                        for (int t = 0; t < 16; ++t, addr += 0x1000) {
+                            buf[0] = '\"';
+                            for (int k = 0; k < 16; ++k) {
+                                buf[k + 1] = *((unsigned char*)addr + k * 0x100);
+                                if (!buf[k + 1]) buf[k + 1] = nullch;
+                                //sprintf(buf, "[%c](%02x)", *((unsigned char*)addr + k), *((unsigned char*)addr + k));
+                            }
+                            buf[17] = '\"';
+                            buf[18] = '\0';
+                            putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                            cursor.y = cons_newline(cursor.y, sheet);
+                        }
+                        sprintf(buf, "[begin: 0x%08x - end:0x%08x, null=\'%c\']", addr - 0x10000, addr, nullch);
+                        putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                        cursor.y = cons_newline(cursor.y, sheet);
+
+                    } else if (!strncmp(cmdline, "msearch ", 8)) {
+                        //strcpy(buf, (char*)finfo);
+                        //int i = 0;
+                        //do {
+                        //    ++i;
+                        //    buf[i] = cmdline[i + 5];
+                        //} while (cmdline[i]);
+
+                        strcpy(buf, cmdline + 8);
+                        int i = 0, j;
+                        while (buf[i] != ' ') ++i;
+                        buf[i] = '\0';
+                        unsigned char word[16];
+                        strcpy(word, buf);
+                        for (j = 0; buf[i + j + 1]; ++j) buf[j] = buf[i + j + 1];
+                        buf[j] = '\0';
+
+                        int addr = atoi(buf), len = strlen(word);
+                        char match;
+                        int addr_end = 0x01000000;
+
+                        for (; addr < addr_end; ++addr) {
+                            match = TRUE;
+                            for (i = 0; i < len && match; ++i) {
+                                if (((unsigned char*)addr)[i] != word[i]) match = FALSE;
+                            }
+                            if (match) break;
+                        }
+                        if (match)
+                            sprintf(buf, "word found at: %08x", addr);
+
+                        else
+                            sprintf(buf, "word not found by: %08x", addr_end);
+
+                        putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+                        cursor.y = cons_newline(cursor.y, sheet);
+                    } else if (cmdline[0]) {
+                        putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, "invalid command.", 16);
+                        cursor.y = cons_newline(cursor.y, sheet);
+                        //cursor.y = cons_newline(cursor.y, sheet);
+                    }
+
+                    putfonts8_sht(sheet, 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, ">", 1);
+                    cursor.x = 1;
                 } else {
-                    if (cursor.x < 29) {
+                    if (cursor.x < width) {
                         buf[0] = data;
                         buf[1] = '\0';
+                        cmdline[cursor.x - 1] = data;
                         putfonts8_sht(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
                         cursor.x++;
                     }
                 }
             }
-            boxfill8(sheet->buf, sheet->bxsize, cursor.col, cursor.x * 8 + 8, cursor.y * 16 + 28, cursor.x * 8 + 15, cursor.y * 16 + 43);
-            sheet_refresh(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, cursor.x * 8 + 16, cursor.y * 16 + 44);
+            if (cursor.col >= 0) putfonts8_sht(sheet, cursor.x * 8 + 8, cursor.y * 16 + 28, COL8_008484, cursor.col, " ", 1);
         }
     }
+}
+
+int cons_newline(int cursor_y, struct SHEET* sheet) {
+    int width = (sheet->bxsize - 8 - 1) / 8 - 2, height = (sheet->bysize - 28 - 1) / 16 - 1;
+
+    if (cursor_y < height - 1)
+        cursor_y++;
+    else {
+        for (int y = 28; y < 28 + (height - 1) * 16; ++y) {
+            for (int x = 8; x < 8 + (width - 1) * 8; ++x) {
+                sheet->buf[x + y * sheet->bxsize] = sheet->buf[x + (y + 16) * sheet->bxsize];
+            }
+        }
+        for (int y = 28 + (height - 1) * 16; y < 28 + height * 16; ++y) {
+            for (int x = 8; x < 8 + (width - 1) * 8; ++x) {
+                sheet->buf[x + y * sheet->bxsize] = COL8_000000;
+            }
+        }
+        sheet_refresh(sheet, 8, 28, 8 + (width - 1) * 8, 28 + height * 16);
+    }
+    return cursor_y;
 }
