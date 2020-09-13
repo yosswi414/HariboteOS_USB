@@ -1,4 +1,4 @@
-
+; Haribote OS assembly
 VBEMODE	EQU		0x105
 	; VESA VBE video modes
 	; http://www.faqs.org/faqs/pc-hardware-faq/supervga-programming/
@@ -10,7 +10,7 @@ VBEMODE	EQU		0x105
 
 BOTPAK	EQU		0x00280000		; where bootpack will be loaded
 DSKCAC	EQU		0x00100000		; address of disk cache
-DSKCAC0	EQU		0x00080000		; address of disk cache (real mode)
+DSKCAC0	EQU		0x00008000		; address of disk cache (real mode)
 
 ; BOOT_INFO
 CYLS	EQU		0x0ff0			; set by boot sector

@@ -23,6 +23,27 @@ char* strcpy(char* restrict s1, const char* restrict s2) {
     return s1;
 }
 
+char* strncpy(char* restrict s1, const char* restrict s2, size_t n){
+    int pos = 0;
+    char ch;
+    do {
+        ch = s2[pos];
+        s1[pos++] = ch;
+        if (ch == '\0') break;
+    } while (pos < n);
+    return s1;
+}
+
+char* strncpy_f(char* restrict s1, const char* restrict s2, size_t n) {
+    int pos = 0;
+    char ch;
+    do {
+        ch = s2[pos];
+        s1[pos++] = ch;
+    } while (pos < n);
+    return s1;
+}
+
 char* strcat(char* s1, const char* s2) {
     int pos = strlen(s1);
     for (int i = 0; i == 0 || s2[i - 1] != '\0'; ++i) s1[pos + i] = s2[i];
@@ -106,17 +127,18 @@ int atoi(const char* str) {
     int u, r = 0, i = 0;
     char neg = FALSE;
     if (str[0] == '-') neg = TRUE, i++;
-    if (str[len - 1] == 'b' || str[len - 1] == 'B') {
+    if (str[0] == '0') {
+        base = 8, i++;
+        if (tolower(str[1]) == 'x') base = 16, i++;
+    } else if (tolower(str[len - 1]) == 'b') {
         base = 2;
         len--;
-    } else if (str[0] == '0') {
-        base = 8, i++;
-        if (str[1] == 'x' || str[1] == 'X') base = 16, i++;
     }
     for (; i < len; ++i) {
-        if ('a' <= str[i] && str[i] <= 'f') u = str[i] - 'a' + 10;
-        else if ('A' <= str[i] && str[i] <= 'A') u = str[i] - 'A' + 10;
-        else u = str[i] - '0';
+        if ('a' <= tolower(str[i]) && tolower(str[i]) <= 'f')
+            u = tolower(str[i]) - 'a' + 10;
+        else
+            u = str[i] - '0';
         r = r * base + (neg ? -u : u);
     }
     return r;

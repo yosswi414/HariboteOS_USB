@@ -2,22 +2,27 @@
 #include "asmfunc.h"
 #include "desctable.h"
 #include "timer.h"
+
 struct TASKCTL* taskctl;
 struct TIMER* task_timer;
 
 struct TASK* task_init(struct MEMMAN* memman) {
     struct TASK *task, *idle;
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
+
     taskctl = (struct TASKCTL*)memman_alloc_4k(memman, sizeof(struct TASKCTL));
+
     for (int i = 0; i < MAX_TASKS; ++i) {
         taskctl->tasks0[i].flags = TASK_STATE_STOPPED;
         taskctl->tasks0[i].sel = (TASK_GDT0 + i) << 3;
         set_segmdesc(gdt + TASK_GDT0 + i, 103, (int)&taskctl->tasks0[i].tss, AR_TSS32);
     }
+
     for (int i = 0; i < MAX_TASK_LEVELS; ++i) {
         taskctl->level[i].running = 0;
         taskctl->level[i].now = 0;
     }
+
     task = task_alloc();
     task->flags = TASK_STATE_RUNNING;
     task->priority = 2;
