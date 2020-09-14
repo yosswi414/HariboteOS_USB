@@ -92,7 +92,8 @@ clean :
 	$(DEL) *.lst
 	$(DEL) *.img
 	$(DEL) *.sys
-
+	$(DEL) *.map
+	
 evacuate :
 	git add ./*
 	git commit -m 'in case of loss of data'
