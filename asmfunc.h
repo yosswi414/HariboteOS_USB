@@ -40,5 +40,8 @@ void store_cr0(int cr0);
 uint memtest_sub(uint start, uint end);
 void load_tr(int tr);
 void farjmp(int eip, int cs);
+void farcall(int eip, int cs);
+void asm_cons_putchar();
+void asm_hrb_api();
 
 #endif

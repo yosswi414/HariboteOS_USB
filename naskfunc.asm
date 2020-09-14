@@ -15,8 +15,12 @@
 		EXTERN	inthandler20, inthandler21, inthandler27, inthandler2c
 		GLOBAL	load_cr0, store_cr0
 		GLOBAL	memtest_sub
-
 		GLOBAL	load_tr, farjmp
+		GLOBAL	farcall
+		GLOBAL	asm_cons_putchar
+		EXTERN	cons_putchar
+		GLOBAL	asm_hrb_api
+		EXTERN	hrb_api
 
 [SECTION .text]
 
@@ -207,3 +211,28 @@ load_tr:		; void load_tr(int tr);
 farjmp:			; void farjmp(int eip, int cs);
 		JMP		FAR [ESP+4]
 		RET
+
+farcall:		; void farcall(int eip, int cs);
+		CALL	FAR	[ESP+4]
+		RET
+
+asm_cons_putchar:
+		STI
+		PUSHAD
+		PUSH	1				; move = TRUE
+		AND		EAX, 0x00ff		; AH = 0
+		PUSH	EAX				; chr = EAX
+		PUSH	DWORD [0x0fec]	; cons = 0x0fec
+		CALL	cons_putchar
+		ADD		ESP, 3*4		; pop data on stack
+		POPAD
+		IRETD
+
+asm_hrb_api:
+		STI
+		PUSHAD
+		PUSHAD
+		CALL	hrb_api
+		ADD		ESP, 32			; pop data on stack
+		POPAD
+		IRETD

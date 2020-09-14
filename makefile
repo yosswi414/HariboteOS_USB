@@ -62,15 +62,15 @@ $(BTP).obj : $(BTP).c makefile
 	$(CC) $(CFLAGS) $*.c -o $@
 
 $(BTP).bin : $(OBJS) $(LKS) makefile
-	ld -m elf_i386 -T $(LKS) $(OBJS) -o $(BTP).bin
+	ld -Map=$(BTP).map -m elf_i386 -T $(LKS) $(OBJS) -o $(BTP).bin
 	
 $(HRB) : $(ASH).bin $(BTP).bin makefile
 	cat $(ASH).bin $(BTP).bin > $(HRB)
 
-hlt.hrb : hlt.asm app.ld
-	$(NASM) -o $@ hlt.asm -l hlt.lst
+hello.hrb : hello.asm
+	$(NASM) -o $@ hello.asm -l hello.lst
 
-$(DST) : $(IPL) $(HRB) hlt.hrb makefile
+$(DST) : $(IPL) $(HRB) hello.hrb makefile
 	mformat -f 1440 -C -B $(IPL) -i $@ ::
 	mcopy $(HRB) -i $@ ::
 	mcopy asmhead.asm -i $@ ::
@@ -79,7 +79,7 @@ $(DST) : $(IPL) $(HRB) hlt.hrb makefile
 	mcopy readme.md -i $@ ::
 	mcopy window.h -i $@ ::
 	mcopy console.c -i $@ ::
-	mcopy hlt.hrb -i $@ ::
+	mcopy hello.hrb -i $@ ::
 	#dd if=$(IPL) of=$(DST)
 	#dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
 

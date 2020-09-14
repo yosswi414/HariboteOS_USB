@@ -1,10 +1,10 @@
-#define PROGRESS_CHAPTER 19
-#define PROGRESS_PAGE 390
+#define PROGRESS_CHAPTER 20
+#define PROGRESS_PAGE 402
 #define PROGRESS_YEAR 2020
 #define PROGRESS_MONTH 9
 #define PROGRESS_DAY 14
-#define PROGRESS_HOUR 03
-#define PROGRESS_MIN 34
+#define PROGRESS_HOUR 20
+#define PROGRESS_MIN 21
 
 #include "asmfunc.h"
 #include "desctable.h"
@@ -24,6 +24,7 @@
 void task_b_main(struct SHEET* sht_back);
 
 int dbg_val[4];
+char dbg_str[4][64];
 
 extern struct FIFO8 keyfifo;
 extern struct FIFO8 mousefifo;
@@ -135,7 +136,7 @@ void HariMain(void) {
     my = (binfo->scrny - 28 - 16) / 2;
 
     // sht_cons
-    int cons_height = 480;
+    int cons_height = 720;
     int cons_width = 640;
     struct SHEET* sht_cons;
     unsigned char* buf_cons;
@@ -155,7 +156,7 @@ void HariMain(void) {
     task_run(task_cons, 2, 2); // level = priority = 2
 
     sheet_slide(sht_back, 0, 0);
-    sheet_slide(sht_cons, 350, 100);
+    sheet_slide(sht_cons, 350, 16);
     sheet_slide(sht_win, 20, 200);
     sheet_slide(sht_mouse, mx, my);
 
