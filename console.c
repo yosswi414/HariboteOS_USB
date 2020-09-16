@@ -148,12 +148,12 @@ void cons_newline(struct CONSOLE* cons) {
     return;
 }
 
-void cons_putstr0(struct CONSOLE* cons, const char* s){
+void cons_putstr0(struct CONSOLE* cons, const char* s) {
     while (*s) cons_putchar(cons, *(s++), TRUE);
     return;
 }
 
-void cons_putstr1(struct CONSOLE* cons, const char* s, size_t n){
+void cons_putstr1(struct CONSOLE* cons, const char* s, size_t n) {
     for (int i = 0; i < n; ++i) cons_putchar(cons, s[i], TRUE);
     return;
 }
@@ -280,7 +280,7 @@ void cmd_ls(struct CONSOLE* cons) {
                 sprintf(buf, "filename.ext   %7d\n", finfo[x].size);
                 strncpy(buf, finfo[x].name, 8);
                 strncpy(buf + 9, finfo[x].ext, 3);
-                
+
                 // for (int y = 0; y < 8; y++) {
                 //     buf[y] = finfo[x].name[y];
                 // }
@@ -440,11 +440,14 @@ void cmd_debug(struct CONSOLE* cons) {
     cons_newline(cons);
 }
 
+#define SIZE_APPMEM (64 * 1024)
+
 int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct FILEINFO* finfo;
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
-    char name[18], *p;
+    char name[18], *p, *q;
+    struct TASK* task = task_now();
     int i;
     for (i = 0; i < 13 && cmdline[i] > ' '; ++i) name[i] = cmdline[i];
     name[i] = '\0';
@@ -457,22 +460,33 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     }
     if (finfo) {
         p = (char*)memman_alloc_4k(memman, finfo->size);
+        q = (char*)memman_alloc_4k(memman, SIZE_APPMEM);
         *((int*)0x0fe8) = (int)p;
         file_loadfile(finfo->clustno, finfo->size, p, fat, (char*)(ADDR_DISKIMG + 0x003e00));
-        set_segmdesc(gdt + 1003, finfo->size - 1, (int)p, AR_CODE32_ER);
-        farcall(0, 1003 * 8);
+        set_segmdesc(gdt + 1003, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
+        set_segmdesc(gdt + 1004, SIZE_APPMEM - 1, (int)q, AR_DATA32_RW + 0x60);
+        if (finfo->size >= 8 && !strncmp(p + 4, "Hari", 4)) {
+            p[0] = 0xe8;
+            p[1] = 0x16;
+            p[2] = p[3] = p[4] = 0x00;
+            p[5] = 0xcb;
+        }
+        //farcall(0, 1003 * 8);
+        start_app(0, 1003 * 8, SIZE_APPMEM, 1004 * 8, &(task->tss.esp0));
         memman_free_4k(memman, (int)p, finfo->size);
+        memman_free_4k(memman, (int)q, SIZE_APPMEM);
         cons_newline(cons);
         return 0;
     }
     return 1;
 }
 
-void hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax){
+int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
     int cs_base = *((int*)0x0fe8);
+    struct TASK* task = task_now();
     struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
 
-    switch(edx){
+    switch (edx) {
     case 1:
         cons_putchar(cons, eax & 0xff, TRUE);
         break;
@@ -482,6 +496,15 @@ void hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
     case 3:
         cons_putstr1(cons, (char*)ebx + cs_base, ecx);
         break;
+    case 4:
+        return &(task->tss.esp0);
     }
-    return;
+    return NULL;
+}
+
+int* inthandler0d(int* esp) {
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct TASK* task = task_now();
+    cons_putstr0(cons, "\nINT 0x0D :\nGeneral Protected Exception.\nThis process will be terminated.");
+    return &(task->tss.esp0);
 }

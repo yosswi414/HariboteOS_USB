@@ -21,6 +21,9 @@
 		EXTERN	cons_putchar
 		GLOBAL	asm_hrb_api
 		EXTERN	hrb_api
+		GLOBAL	start_app
+		GLOBAL	asm_inthandler0d
+		EXTERN	inthandler0d
 
 [SECTION .text]
 
@@ -99,15 +102,35 @@ load_idtr:		; void load_idtr(int limit, int addr);
 		LIDT	[ESP+6]
 		RET
 
+asm_inthandler0d:
+		STI
+		PUSH	ES
+		PUSH	DS
+		PUSHAD
+		MOV		EAX, ESP
+		PUSH	EAX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
+		CALL	inthandler0d
+		CMP		EAX, 0
+		JNE		end_app
+		POP		EAX
+		POPAD
+		POP		DS
+		POP		ES
+		ADD		ESP, 4		; INT 0x0d needs this
+		IRETD
+
 asm_inthandler20:
 		PUSH	ES
 		PUSH	DS
 		PUSHAD
-		MOV		EAX,ESP
+		MOV		EAX, ESP
 		PUSH	EAX
-		MOV		AX,SS
-		MOV		DS,AX
-		MOV		ES,AX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
 		CALL	inthandler20
 		POP		EAX
 		POPAD
@@ -119,11 +142,11 @@ asm_inthandler21:
 		PUSH	ES
 		PUSH	DS
 		PUSHAD
-		MOV		EAX,ESP
+		MOV		EAX, ESP
 		PUSH	EAX
-		MOV		AX,SS
-		MOV		DS,AX
-		MOV		ES,AX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
 		CALL	inthandler21
 		POP		EAX
 		POPAD
@@ -135,11 +158,11 @@ asm_inthandler27:
 		PUSH	ES
 		PUSH	DS
 		PUSHAD
-		MOV		EAX,ESP
+		MOV		EAX, ESP
 		PUSH	EAX
-		MOV		AX,SS
-		MOV		DS,AX
-		MOV		ES,AX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
 		CALL	inthandler27
 		POP		EAX
 		POPAD
@@ -151,11 +174,11 @@ asm_inthandler2c:
 		PUSH	ES
 		PUSH	DS
 		PUSHAD
-		MOV		EAX,ESP
+		MOV		EAX, ESP
 		PUSH	EAX
-		MOV		AX,SS
-		MOV		DS,AX
-		MOV		ES,AX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
 		CALL	inthandler2c
 		POP		EAX
 		POPAD
@@ -230,9 +253,47 @@ asm_cons_putchar:
 
 asm_hrb_api:
 		STI
-		PUSHAD
-		PUSHAD
+		PUSH	DS
+		PUSH	ES
+		PUSHAD					; to save
+		PUSHAD					; to pass to hrb_api
+		MOV		AX, SS
+		MOV		DS, AX			; copy segment for OS to DS and ES
+		MOV		ES, AX
 		CALL	hrb_api
-		ADD		ESP, 32			; pop data on stack
+		CMP		EAX, 0
+		JNE		end_app
+		ADD		ESP, 32
 		POPAD
+		POP		ES
+		POP		DS
 		IRETD
+end_app:
+		; EAX = address of tss.esp0
+		MOV		ESP, [EAX]
+		POPAD
+		RET		; get back to cmd_app
+
+start_app:		; void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
+		PUSHAD
+		MOV		EAX, [ESP+36]	; EIP for app
+		MOV		ECX, [ESP+40]	; CS for app
+		MOV		EDX, [ESP+44]	; ESP for app
+		MOV		EBX, [ESP+48]	; DS/SS for app
+		MOV		EBP, [ESP+52]	; address of tss.esp0
+		MOV		[EBP], ESP		; save ESP for OS
+		MOV		[EBP+4], SS		; save SS for OS
+		MOV		ES, BX
+		MOV		DS, BX
+		MOV		FS, BX
+		MOV		GS, BX
+
+		; adjust stack to allow RETF jump to app
+
+		OR		ECX, 3
+		OR		EBX, 3
+		PUSH	EBX				; SS
+		PUSH	EDX				; ESP
+		PUSH	ECX				; CS
+		PUSH	EAX				; EIP
+		RETF

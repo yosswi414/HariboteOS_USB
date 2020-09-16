@@ -29,6 +29,8 @@ void cmd_mwrite(struct CONSOLE* cons, int addr, unsigned char val);
 void cmd_debug(struct CONSOLE* cons);
 int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline);
 
-void hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
+int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
+
+int* inthandler0d(int* esp);
 
 #endif
