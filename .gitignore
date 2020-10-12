@@ -36,6 +36,8 @@
 ehthumbs.db
 Thumbs.db
 
+# added by user #
+#################
 *.obj
 *.bin
 *.lst
