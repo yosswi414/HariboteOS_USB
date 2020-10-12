@@ -39,34 +39,34 @@ char keycode_tochar(int code, char shift) {
 char* keycode_toname(int code) {
     int pos = 0;
     switch (code) {
-    case 0x7b: ++pos;
-    case 0x79: ++pos;
-    case 0x70: ++pos;
-    case 0x58: ++pos;
-    case 0x57: ++pos;
-    case 0x54: ++pos;
-    case 0x46: ++pos;
-    case 0x45: ++pos;
-    case 0x44: ++pos;
-    case 0x43: ++pos;
-    case 0x42: ++pos;
-    case 0x41: ++pos;
-    case 0x40: ++pos;
-    case 0x3f: ++pos;
-    case 0x3e: ++pos;
-    case 0x3d: ++pos;
-    case 0x3c: ++pos;
-    case 0x3b: ++pos;
-    case 0x3a: ++pos;
-    case 0x38: ++pos;
-    case 0x36: ++pos;
-    case 0x2a: ++pos;
-    case 0x29: ++pos;
-    case 0x1d: ++pos;
-    case 0x1c: ++pos;
-    case 0x0f: ++pos;
-    case 0x0e: ++pos;
-    case 0x01: ++pos;
+    case 0x7b: ++pos; // Unconvert
+    case 0x79: ++pos; // Convert
+    case 0x70: ++pos; // Hiragana
+    case 0x58: ++pos; // F12
+    case 0x57: ++pos; // F11
+    case 0x54: ++pos; // SysReq
+    case 0x46: ++pos; // ScrollLock
+    case 0x45: ++pos; // NumLock
+    case 0x44: ++pos; // F10
+    case 0x43: ++pos; // F9
+    case 0x42: ++pos; // F8
+    case 0x41: ++pos; // F7
+    case 0x40: ++pos; // F6
+    case 0x3f: ++pos; // F5
+    case 0x3e: ++pos; // F4
+    case 0x3d: ++pos; // F3
+    case 0x3c: ++pos; // F2
+    case 0x3b: ++pos; // F1
+    case 0x3a: ++pos; // CapsLock
+    case 0x38: ++pos; // LAlt
+    case 0x36: ++pos; // RShift
+    case 0x2a: ++pos; // LShift
+    case 0x29: ++pos; // Han/Zen
+    case 0x1d: ++pos; // LCtrl
+    case 0x1c: ++pos; // Enter full
+    case 0x0f: ++pos; // Tab
+    case 0x0e: ++pos; // Backspace
+    case 0x01: ++pos; // Esc
     }
     return npktable[pos];
 }

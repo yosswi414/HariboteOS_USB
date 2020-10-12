@@ -9,6 +9,7 @@
 #include "mylibgcc.h"
 #include "sheet.h"
 #include "timer.h"
+#include "window.h"
 
 extern int dbg_val[4];
 extern char dbg_str[4][64];
@@ -118,6 +119,7 @@ void cons_putchar(struct CONSOLE* cons, int chr, char move) {
     case '\r':
         break;
     default:
+        if (cons->cur_x >= cons->width) cons_newline(cons);
         putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, s, strlen(s));
         if (move) {
             cons->cur_x++;
@@ -214,6 +216,24 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int mem
             int addr = atoi(buf);
 
             cmd_msearch(cons, addr, word);
+            exit_success = TRUE;
+            break;
+        }
+        if (!strncmp(cmdline, "mvsearch ", 9)) {
+            if (!cmdline[9]) break;
+            strcpy(buf, cmdline + 9);
+            int i = 0, j;
+            while (buf[i] != ' ') ++i;
+            buf[i] = '\0';
+            if (!strlen(buf)) break;
+            unsigned char word[16];
+            strcpy(word, buf);
+            for (j = 0; buf[i + j + 1]; ++j) buf[j] = buf[i + j + 1];
+            buf[j] = '\0';
+            if (!strlen(buf)) break;
+            int addr = atoi(buf);
+
+            cmd_mvsearch(cons, addr, atoi(word));
             exit_success = TRUE;
             break;
         }
@@ -412,6 +432,36 @@ void cmd_msearch(struct CONSOLE* cons, int addr, char* word) {
     cons_newline(cons);
 }
 
+void cmd_mvsearch(struct CONSOLE* cons, int addr, uint val) {
+    uint mask = 0xff;
+    char match = FALSE;
+    int addr_end = 0x01000000;
+
+    if (val >= 0x100) mask = 0xffff;
+    if (val >= 0x10000) mask = 0xffffff;
+    if (val >= 0x1000000) mask = 0xffffffff;
+
+    char buf[64];
+
+    for (; addr < addr_end; ++addr) {
+        if ((*((uint*)addr) & mask) == val) {
+            match = TRUE;
+            break;
+        }
+    }
+    if (match)
+        sprintf(buf, "word [0x%x] found at: %08x [0x%x]", val, addr, *((uint*)addr));
+
+    else
+        sprintf(buf, "word [0x%x] not found by: %08x", val, addr_end);
+
+    putfonts8_sht(cons->sht, cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+    cons_newline(cons);
+    sprintf(buf, "mask: 0x%x", mask);
+    putfonts8_sht(cons->sht, cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
+    cons_newline(cons);
+}
+
 void cmd_mwrite(struct CONSOLE* cons, int addr, unsigned char val) {
     unsigned char old = *((unsigned char*)addr);
     char buf[64];
@@ -425,7 +475,7 @@ void cmd_mwrite(struct CONSOLE* cons, int addr, unsigned char val) {
 
 void cmd_debug(struct CONSOLE* cons) {
     char buf[64];
-    for (int i = 0; i < 4 && dbg_val[i]; ++i) {
+    for (int i = 0; i < 4; ++i) {
         sprintf(buf, "dbg_val[%d] = 0x%08x (%d)", i, dbg_val[i], dbg_val[i]);
         putfonts8_sht(cons->sht, cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, buf, strlen(buf));
         cons_newline(cons);
@@ -448,6 +498,7 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
     char name[18], *p, *q;
     struct TASK* task = task_now();
+    int segsiz, datsiz, esp, dathrb;
     int i;
     for (i = 0; i < 13 && cmdline[i] > ' '; ++i) name[i] = cmdline[i];
     name[i] = '\0';
@@ -460,21 +511,23 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     }
     if (finfo) {
         p = (char*)memman_alloc_4k(memman, finfo->size);
-        q = (char*)memman_alloc_4k(memman, SIZE_APPMEM);
-        *((int*)0x0fe8) = (int)p;
         file_loadfile(finfo->clustno, finfo->size, p, fat, (char*)(ADDR_DISKIMG + 0x003e00));
-        set_segmdesc(gdt + 1003, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
-        set_segmdesc(gdt + 1004, SIZE_APPMEM - 1, (int)q, AR_DATA32_RW + 0x60);
-        if (finfo->size >= 8 && !strncmp(p + 4, "Hari", 4)) {
-            p[0] = 0xe8;
-            p[1] = 0x16;
-            p[2] = p[3] = p[4] = 0x00;
-            p[5] = 0xcb;
+        if (finfo->size >= 36 && !strncmp(p + 4, "Hari", 4) && !*p) {
+            segsiz = *((int*)(p + 0x0000));
+            esp = *((int*)(p + 0x000c));
+            datsiz = *((int*)(p + 0x0010));
+            dathrb = *((int*)(p + 0x0014));
+            q = (char*)memman_alloc_4k(memman, SIZE_APPMEM);
+            *((int*)0x0fe8) = (int)q;
+            set_segmdesc(gdt + 1003, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
+            set_segmdesc(gdt + 1004, segsiz - 1, (int)q, AR_DATA32_RW + 0x60);
+            for (int i = 0; i < datsiz; ++i) q[esp + i] = p[dathrb + i];
+            start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+            memman_free_4k(memman, (int)q, segsiz);
+        } else {
+            cons_putstr0(cons, ".hrb file format error.\n");
         }
-        //farcall(0, 1003 * 8);
-        start_app(0, 1003 * 8, SIZE_APPMEM, 1004 * 8, &(task->tss.esp0));
         memman_free_4k(memman, (int)p, finfo->size);
-        memman_free_4k(memman, (int)q, SIZE_APPMEM);
         cons_newline(cons);
         return 0;
     }
@@ -485,6 +538,22 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
     int cs_base = *((int*)0x0fe8);
     struct TASK* task = task_now();
     struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)0x0fe4);
+    struct SHEET* sht;
+    volatile int* reg = &eax + 1;
+    /* reg: the pointer next to EAX
+    * reg[0] : EDI
+    * reg[1] : ESI
+    * reg[2] : EBP
+    * reg[3] : ESP
+    * reg[4] : EBX
+    * reg[5] : EDX
+    * reg[6] : ECX
+    * reg[7] : EAX
+    * 
+    * volatile keyword makes it not to be removed by optimization
+    * ref: https://www.uquest.co.jp/embedded/learning/lecture09.html
+    */
 
     switch (edx) {
     case 1:
@@ -498,13 +567,74 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
         break;
     case 4:
         return &(task->tss.esp0);
+    case 5:
+        sht = sheet_alloc(shtctl);
+        sheet_setbuf(sht, (char*)ebx + cs_base, esi, edi, eax);
+        make_window8((char*)ebx + cs_base, esi, edi, (char*)ecx + cs_base, 0);
+        sheet_slide(sht, 100, 50);
+        sheet_updown(sht, 3); // on task_a
+        reg[7] = (int)sht; // removed when -O2
+        break;
+    case 6:
+        sht = (struct SHEET*)ebx;
+        putfonts8(sht->buf, sht->bxsize, esi, edi, eax, (char*)ebp + cs_base);
+        sheet_refresh(sht, esi, edi, esi + ecx * 8, edi + 16);
+        break;
+    case 7:
+        // rect draw api for window
+        sht = (struct SHEET*)ebx;
+        boxfill8(sht->buf, sht->bxsize, ebp, eax, ecx, esi, edi);
+        sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
+        break;
+    default:
+        dbg_val[0] = edx;
+        sprintf(dbg_str[0], "\nUNKNOWN EDX CODE DETECTED.\n");
+        cons_putstr0(cons, dbg_str[0]);
+        sprintf(dbg_str[0], "EDX code");
     }
     return NULL;
+}
+
+int* inthandler00(int* esp) {
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct TASK* task = task_now();
+    char s[32];
+    cons_putstr0(cons, "\nINT 0x00 :\nZero Division Exception.\n");
+    sprintf(s, "EIP = 0x%08X\n", esp[11]);
+    cons_putstr0(cons, s);
+    cons_putstr0(cons, "\nThe current process will be terminated.\n");
+    return &(task->tss.esp0);
+}
+
+int* inthandler06(int* esp) {
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct TASK* task = task_now();
+    char s[32];
+    cons_putstr0(cons, "\nINT 0x06 :\nInvalid Instruction Exception.\n");
+    sprintf(s, "EIP = 0x%08X\n", esp[11]);
+    cons_putstr0(cons, s);
+    cons_putstr0(cons, "\nThe current process will be terminated.\n");
+    return &(task->tss.esp0);
+}
+
+int* inthandler0c(int* esp) {
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct TASK* task = task_now();
+    char s[32];
+    cons_putstr0(cons, "\nINT 0x0C :\nStack Exception.\n");
+    sprintf(s, "EIP = 0x%08X\n", esp[11]);
+    cons_putstr0(cons, s);
+    cons_putstr0(cons, "\nThe current process will be terminated.\n");
+    return &(task->tss.esp0);
 }
 
 int* inthandler0d(int* esp) {
     struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
     struct TASK* task = task_now();
-    cons_putstr0(cons, "\nINT 0x0D :\nGeneral Protected Exception.\nThis process will be terminated.");
+    char s[32];
+    cons_putstr0(cons, "\nINT 0x0D :\nGeneral Protected Exception.\n");
+    sprintf(s, "EIP = 0x%08X\n", esp[11]);
+    cons_putstr0(cons, s);
+    cons_putstr0(cons, "\nThe current process will be terminated.\n");
     return &(task->tss.esp0);
 }

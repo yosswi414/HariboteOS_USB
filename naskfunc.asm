@@ -21,9 +21,9 @@
 		EXTERN	cons_putchar
 		GLOBAL	asm_hrb_api
 		EXTERN	hrb_api
-		GLOBAL	start_app
-		GLOBAL	asm_inthandler0d
-		EXTERN	inthandler0d
+		GLOBAL	start_app, asm_end_app
+		GLOBAL	asm_inthandler00, asm_inthandler06, asm_inthandler0c, asm_inthandler0d
+		EXTERN	inthandler00, inthandler06, inthandler0c, inthandler0d
 
 [SECTION .text]
 
@@ -102,6 +102,66 @@ load_idtr:		; void load_idtr(int limit, int addr);
 		LIDT	[ESP+6]
 		RET
 
+asm_inthandler00:
+		STI
+		PUSH	ES
+		PUSH	DS
+		PUSHAD
+		MOV		EAX, ESP
+		PUSH	EAX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
+		CALL	inthandler00
+		CMP		EAX, 0
+		JNE		asm_end_app
+		POP		EAX
+		POPAD
+		POP		DS
+		POP		ES
+		ADD		ESP, 4		; INT 0x00 needs this ?
+		IRETD
+
+asm_inthandler06:
+		STI
+		PUSH	ES
+		PUSH	DS
+		PUSHAD
+		MOV		EAX, ESP
+		PUSH	EAX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
+		CALL	inthandler06
+		CMP		EAX, 0
+		JNE		asm_end_app
+		POP		EAX
+		POPAD
+		POP		DS
+		POP		ES
+		ADD		ESP, 4		; INT 0x06 needs this ?
+		IRETD
+
+asm_inthandler0c:
+		STI
+		PUSH	ES
+		PUSH	DS
+		PUSHAD
+		MOV		EAX, ESP
+		PUSH	EAX
+		MOV		AX, SS
+		MOV		DS, AX
+		MOV		ES, AX
+		CALL	inthandler0c
+		CMP		EAX, 0
+		JNE		asm_end_app
+		POP		EAX
+		POPAD
+		POP		DS
+		POP		ES
+		ADD		ESP, 4		; INT 0x0c needs this
+		IRETD
+
 asm_inthandler0d:
 		STI
 		PUSH	ES
@@ -114,7 +174,7 @@ asm_inthandler0d:
 		MOV		ES, AX
 		CALL	inthandler0d
 		CMP		EAX, 0
-		JNE		end_app
+		JNE		asm_end_app
 		POP		EAX
 		POPAD
 		POP		DS
@@ -262,15 +322,16 @@ asm_hrb_api:
 		MOV		ES, AX
 		CALL	hrb_api
 		CMP		EAX, 0
-		JNE		end_app
+		JNE		asm_end_app
 		ADD		ESP, 32
 		POPAD
 		POP		ES
 		POP		DS
 		IRETD
-end_app:
+asm_end_app:
 		; EAX = address of tss.esp0
 		MOV		ESP, [EAX]
+		MOV		DWORD [EAX+4], 0
 		POPAD
 		RET		; get back to cmd_app
 

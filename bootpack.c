@@ -1,12 +1,13 @@
-#define PROGRESS_CHAPTER 21
-#define PROGRESS_PAGE 444
+#define PROGRESS_CHAPTER 22
+#define PROGRESS_PAGE 469
 #define PROGRESS_YEAR 2020
-#define PROGRESS_MONTH 9
-#define PROGRESS_DAY 17
-#define PROGRESS_HOUR 2
-#define PROGRESS_MIN 59
+#define PROGRESS_MONTH 10
+#define PROGRESS_DAY 12
+#define PROGRESS_HOUR 9
+#define PROGRESS_MIN 4
 
 #include "asmfunc.h"
+#include "console.h"
 #include "desctable.h"
 #include "device.h"
 #include "fifo.h"
@@ -19,7 +20,6 @@
 #include "sheet.h"
 #include "timer.h"
 #include "window.h"
-#include "console.h"
 
 void task_b_main(struct SHEET* sht_back);
 
@@ -53,7 +53,9 @@ void HariMain(void) {
 
     struct TASK* task_a;
 
-    int key_to = 0, key_shift = 0, key_leds = (binfo->leds >> 4) & 7, keycmd_wait = -1;
+    struct CONSOLE* cons;
+
+    int key_to = 0, key_shift = 0, key_ctrl = 0, key_leds = (binfo->leds >> 4) & 7, keycmd_wait = -1;
 
     init_gdtidt();
     init_pic();
@@ -83,6 +85,7 @@ void HariMain(void) {
 
     // sht_back
     sht_back = sheet_alloc(shtctl);
+    *((int*)0x0fe4) = (int)shtctl;
     buf_back = (unsigned char*)memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
     sheet_setbuf(sht_back, buf_back, binfo->scrnx, binfo->scrny, -1);
     init_screen(buf_back, binfo->scrnx, binfo->scrny);
@@ -243,9 +246,29 @@ void HariMain(void) {
                         }
                     }
                     if (ch) {
-                        if (key_to)
-                            fifo32_put(&task_cons->fifo, ch | KEYSIG_BIT);
-                        else {
+                        if (key_to) {
+                            if (key_ctrl && tolower(ch) == 'c') { // Ctrl + c
+                                cons = (struct CONSOLE*)*((int*)0x0fec);
+                                dbg_val[0] = cons->cur_x;
+                                sprintf(dbg_str[0], "Cursor X");
+                                dbg_val[1] = cons->cur_y;
+                                sprintf(dbg_str[1], "Cursor Y");
+                                cons_putstr0(cons, "^C\n");
+                                dbg_val[2] = cons->cur_x;
+                                sprintf(dbg_str[2], "Cursor X\'");
+                                dbg_val[3] = cons->cur_y;
+                                sprintf(dbg_str[3], "Cursor Y\'");
+                                if (task_cons->tss.ss0) {
+                                    cons_putstr0(cons, "User Interrupt Detected.\nThe current process will be terminated.\n");
+                                    io_cli();
+                                    task_cons->tss.eax = (int)&(task_cons->tss.esp0);
+                                    task_cons->tss.eip = (int)asm_end_app;
+                                    io_sti();
+                                } else
+                                    cons_putchar(cons, '>', TRUE);
+                            } else
+                                fifo32_put(&task_cons->fifo, ch | KEYSIG_BIT);
+                        } else {
                             if (cursor_line + 1 < maxline || linech[cursor_line] + 1 < maxchar) {
                                 textbox[cursor_line][linech[cursor_line]++] = ch;
                                 if (linech[cursor_line] + 1 == maxchar && cursor_line + 1 < maxline)
@@ -259,6 +282,12 @@ void HariMain(void) {
                     if (data == 0x36) { // RShift
                         key_shift |= 2;
                     }
+                    if (data == 0x1d) { // LCtrl
+                        key_ctrl |= 1;
+                    }
+                    //if (data == 0x) { // RCtrl
+                    //    key_ctrl |= 2;
+                    //}
                     if (data == 0x0f) { // Tab
                         make_wtitle8(buf_win, sht_win->bxsize, "task_a", key_to);
                         make_wtitle8(buf_cons, sht_cons->bxsize, "console", !key_to);
@@ -296,8 +325,12 @@ void HariMain(void) {
                 } else {
                     if (data == 0x2a) {
                         key_shift &= ~1;
-                    } else if (data == 0x36) {
+                    }
+                    if (data == 0x36) {
                         key_shift &= ~2;
+                    }
+                    if (data == 0x1d) {
+                        key_ctrl &= ~1;
                     }
                 }
             } else if (data & MOUSESIG_BIT) { // MOUSE
@@ -385,4 +418,3 @@ void task_b_main(struct SHEET* sht_win_b) {
         }
     }
 }
-

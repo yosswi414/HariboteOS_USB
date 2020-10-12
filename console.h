@@ -25,12 +25,16 @@ int cmd_cat(struct CONSOLE* cons, int* fat, char* cmdline);
 void cmd_dump(struct CONSOLE* cons, int addr);
 void cmd_fump(struct CONSOLE* cons, int addr);
 void cmd_msearch(struct CONSOLE* cons, int addr, char* word);
+void cmd_mvsearch(struct CONSOLE* cons, int addr, uint val);
 void cmd_mwrite(struct CONSOLE* cons, int addr, unsigned char val);
 void cmd_debug(struct CONSOLE* cons);
 int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline);
 
 int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
 
+int* inthandler00(int* esp);
+int* inthandler06(int* esp);
+int* inthandler0c(int* esp);
 int* inthandler0d(int* esp);
 
 #endif

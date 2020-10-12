@@ -1,3 +1,4 @@
+
 MAKE	= make -r
 # -r (--no-builtin-rules) : eliminate use of the built-in implicit rules
 ASH	= asmhead
@@ -26,9 +27,12 @@ FIL = file
 
 OBJS = $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
 CFLAGS = -O2 -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
+CFLAGS_O0 = -O0 -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
 
 DEL = rm -f
 # デフォルト動作
+
+.PHONY : default clean img evacuate mcp
 
 default :
 	#$(MAKE) clean
@@ -67,43 +71,34 @@ $(BTP).bin : $(OBJS) $(LKS) makefile
 $(HRB) : $(ASH).bin $(BTP).bin makefile
 	cat $(ASH).bin $(BTP).bin > $(HRB)
 
-hello.hrb : hello.asm makefile
-	$(NASM) -o $@ hello.asm -l hello.lst
-
 a_nasm.obj : a_nasm.asm makefile
 	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm
-
-a.hrb : a.c a_nasm.obj app.ld makefile
-	$(CC) $(CFLAGS) -o a.obj a.c
-	ld -Map=a.map -m elf_i386 -T app.ld -o $@ a.obj a_nasm.obj
-
-helloapi.hrb : hello_api.c a_nasm.obj app.ld makefile
-	$(CC) $(CFLAGS) -o hello_api.obj hello_api.c
-	ld -Map=a.map -m elf_i386 -T app.ld -o $@ hello_api.obj a_nasm.obj
 
 crack1.hrb : crack1.c app.ld makefile
 	$(CC) $(CFLAGS) -o crack1.obj crack1.c
 	ld -Map=crack1.map -m elf_i386 -T app.ld -o $@ crack1.obj
-crack2.hrb : crack2.asm makefile
-	$(NASM) -o $@ crack2.asm -l crack2.lst
 
-$(DST) : $(IPL) $(HRB) hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb makefile
+bugzero.hrb : bug_zerodiv.c mylibgcc.obj a_nasm.obj app.ld makefile
+	$(CC) $(CFLAGS_O0) -o bug_zerodiv.obj bug_zerodiv.c
+	ld -Map=bugzero.map -m elf_i386 -T app.ld -o $@ bug_zerodiv.obj mylibgcc.obj a_nasm.obj
+
+%.hrb : %.asm app.ld makefile
+	# $*
+	$(NASM) -f elf32 -o $*.obj $*.asm -l $*.lst
+	ld -Map=$*.map -m elf_i386 -T app.ld -o $@ $*.obj
+
+# some illegal operation could be removed by optimization
+%.hrb : %.c a_nasm.obj app.ld makefile
+	$(CC) $(CFLAGS) -o $*.obj -l $*.lst $*.c
+	ld -Map=$*.map -m elf_i386 -T app.ld -o $@ $*.obj a_nasm.obj
+
+FILES = $(HRB) winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb asmhead.asm fifo.c btp.ld readme.md window.h console.c Sarah_Crowely.txt
+$(DST) : $(IPL) $(FILES) makefile
 	mformat -f 1440 -C -B $(IPL) -i $@ ::
-	mcopy $(HRB) -i $@ ::
-	mcopy asmhead.asm -i $@ ::
-	mcopy fifo.c -i $@ ::
-	mcopy btp.ld -i $@ ::
-	mcopy readme.md -i $@ ::
-	mcopy window.h -i $@ ::
-	mcopy console.c -i $@ ::
-	mcopy hello.hrb -i $@ ::
-	mcopy a.hrb -i $@ ::
-	mcopy helloapi.hrb -i $@ ::
-	mcopy crack1.hrb -i $@ ::
-	mcopy crack2.hrb -i $@ ::
-	mcopy Sarah_Crowely.txt -i $@ ::
-	#dd if=$(IPL) of=$(DST)
-	#dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
+	$(foreach file, $(FILES), mcopy $(file) -i $@ ::;)
+###$(foreach file, $(FILES), $(eval $(call mcp,$(file))))
+#dd if=$(IPL) of=$(DST)
+#dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
 
 img :
 	$(MAKE) $(DST)
@@ -120,3 +115,13 @@ evacuate :
 	git add ./*
 	git commit -m 'in case of loss of data'
 	git push origin master
+
+.PHONY: test
+
+define template
+    @echo "arg : $1"
+
+endef
+
+test : $(HRB) bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb makefile
+	$(foreach x,$^,$(call template,$(x)))

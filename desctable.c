@@ -40,7 +40,12 @@ void init_gdtidt(void) {
     load_idtr(LIMIT_IDT, ADDR_IDT);
 
     // set functions on IDT
+    // 0x00 ~ 0x1f : exception interrupt
+    set_gatedesc(idt + 0x00, (int)asm_inthandler00, 2 << 3, AR_INTGATE32);
+    set_gatedesc(idt + 0x06, (int)asm_inthandler06, 2 << 3, AR_INTGATE32);
+    set_gatedesc(idt + 0x0c, (int)asm_inthandler0c, 2 << 3, AR_INTGATE32);
     set_gatedesc(idt + 0x0d, (int)asm_inthandler0d, 2 << 3, AR_INTGATE32);
+    // 0x20 ~ 0x2f : IRQ interrupt
     set_gatedesc(idt + 0x20, (int)asm_inthandler20, 2 << 3, AR_INTGATE32);
     set_gatedesc(idt + 0x21, (int)asm_inthandler21, 2 << 3, AR_INTGATE32);
     set_gatedesc(idt + 0x27, (int)asm_inthandler27, 2 << 3, AR_INTGATE32);
