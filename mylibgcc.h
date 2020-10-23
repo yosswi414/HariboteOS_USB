@@ -9,7 +9,7 @@ typedef char* va_list;
 #define va_arg(v, l) __builtin_va_arg(v, l)
 #define va_copy(d, s) __builtin_va_copy(d, s)
 
-int strlen(const char* s);
+size_t strlen(const char* s);
 char* strcpy(char* restrict s1, const char* restrict s2);
 char* strncpy(char* restrict s1, const char* restrict s2, size_t n);
 void* memcpy(void* restrict s1, const void* restrict s2, size_t n);
@@ -29,5 +29,6 @@ int isxdigit(int ch);
 int toupper(int ch);
 int tolower(int ch);
 int sprintf(char* restrict s, const char* restrict format, ...);
+uint rand_xor32(void);
 
 #endif

@@ -2,6 +2,7 @@
 #define _SHEET_H_
 
 #include "memory.h"
+#include "mtask.h"
 
 #define SHEET_USE TRUE
 #define SHEET_VACANT FALSE
@@ -11,6 +12,7 @@ struct SHEET {
     unsigned char* buf;
     int bxsize, bysize, vx0, vy0, col_inv, height, flags;
     struct SHTCTL* ctl;
+    struct TASK* task;
 };
 
 struct SHTCTL {

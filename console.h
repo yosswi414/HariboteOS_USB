@@ -7,6 +7,8 @@ struct CONSOLE {
     struct SHEET* sht;
     int cur_x, cur_y;
     int cur_c;
+    struct TIMER* timer;
+
     int off_x, off_y;
     int width, height;
 };
@@ -31,6 +33,7 @@ void cmd_debug(struct CONSOLE* cons);
 int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline);
 
 int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
+void hrb_api_linewin(struct SHEET* sht, int x0, int y0, int x1, int y1, int col);
 
 int* inthandler00(int* esp);
 int* inthandler06(int* esp);

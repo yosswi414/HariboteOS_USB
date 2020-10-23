@@ -15,7 +15,6 @@ extern int dbg_val[4];
 extern char dbg_str[4][64];
 
 void console_task(struct SHEET* sheet, int memtotal) {
-    struct TIMER* timer;
     struct TASK* task = task_now();
     char buf[128], cmdline[128];
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
@@ -25,9 +24,6 @@ void console_task(struct SHEET* sheet, int memtotal) {
 
     int fifobuf[128];
     fifo32_init(&task->fifo, sizeof(fifobuf) / sizeof(int), fifobuf, task);
-    timer = timer_alloc();
-    timer_init(timer, &task->fifo, 1);
-    timer_settime(timer, 50);
 
     file_readfat(fat, (unsigned char*)(ADDR_DISKIMG + 0x000200));
 
@@ -36,6 +32,9 @@ void console_task(struct SHEET* sheet, int memtotal) {
     cons.cur_c = -1;
     cons.cur_x = 0;
     cons.cur_y = 0;
+    cons.timer = timer_alloc();
+    timer_init(cons.timer, &task->fifo, 1);
+    timer_settime(cons.timer, 50);
     cons.off_x = 8;
     cons.off_y = 28;
     cons.width = (cons.sht->bxsize - cons.off_x - 1) / 8 - 2;
@@ -56,9 +55,9 @@ void console_task(struct SHEET* sheet, int memtotal) {
             int data = fifo32_get(&task->fifo);
             io_sti();
             if (data <= 1) { // timer for cursor
-                timer_init(timer, &task->fifo, 1 - data);
+                timer_init(cons.timer, &task->fifo, 1 - data);
                 if (cons.cur_c >= 0) cons.cur_c = data ? COL8_FFFFFF : COL8_000000;
-                timer_settime(timer, 50);
+                timer_settime(cons.timer, 50);
                 //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, cons.cur_c, " ", 1);
             }
             if (data == 2) cons.cur_c = COL8_FFFFFF;
@@ -498,6 +497,8 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
     char name[18], *p, *q;
     struct TASK* task = task_now();
+    struct SHTCTL* shtctl;
+    struct SHEET* sht;
     int segsiz, datsiz, esp, dathrb;
     int i;
     for (i = 0; i < 13 && cmdline[i] > ' '; ++i) name[i] = cmdline[i];
@@ -523,6 +524,13 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
             set_segmdesc(gdt + 1004, segsiz - 1, (int)q, AR_DATA32_RW + 0x60);
             for (int i = 0; i < datsiz; ++i) q[esp + i] = p[dathrb + i];
             start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+
+            shtctl = (struct SHTCTL*)*((int*)0x0fe4);
+            for (int i = 0; i < MAX_SHEETS;++i){
+                sht = &(shtctl->sheets0[i]);
+                if (sht->flags && sht->task == task) sheet_free(sht);
+            }
+
             memman_free_4k(memman, (int)q, segsiz);
         } else {
             cons_putstr0(cons, ".hrb file format error.\n");
@@ -569,6 +577,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
         return &(task->tss.esp0);
     case 5:
         sht = sheet_alloc(shtctl);
+        sht->task = task;
         sheet_setbuf(sht, (char*)ebx + cs_base, esi, edi, eax);
         make_window8((char*)ebx + cs_base, esi, edi, (char*)ecx + cs_base, 0);
         sheet_slide(sht, 100, 50);
@@ -576,15 +585,84 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
         reg[7] = (int)sht; // removed when -O2
         break;
     case 6:
-        sht = (struct SHEET*)ebx;
+        sht = (struct SHEET*)(ebx & 0xfffffffe);
         putfonts8(sht->buf, sht->bxsize, esi, edi, eax, (char*)ebp + cs_base);
-        sheet_refresh(sht, esi, edi, esi + ecx * 8, edi + 16);
+        if (~ebx & 1) sheet_refresh(sht, esi, edi, esi + ecx * 8, edi + 16);
         break;
     case 7:
         // rect draw api for window
-        sht = (struct SHEET*)ebx;
+        sht = (struct SHEET*)(ebx & 0xfffffffe);
         boxfill8(sht->buf, sht->bxsize, ebp, eax, ecx, esi, edi);
-        sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
+        if (~ebx & 1) sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
+        break;
+    case 8:
+        // memman init
+        memman_init((struct MEMMAN*)(ebx + cs_base));
+        ecx &= 0xfffffff0;
+        memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
+        break;
+    case 9:
+        // malloc
+        ecx = (ecx + 0x0f) & 0xfffffff0;
+        reg[7] = memman_alloc((struct MEMMAN*)(ebx + cs_base), ecx);
+        break;
+    case 10:
+        // free
+        ecx = (ecx + 0x0f) & 0xfffffff0;
+        memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
+        break;
+    case 11:
+        // draw a dot
+        sht = (struct SHEET*)(ebx & 0xfffffffe);
+        sht->buf[sht->bxsize * edi + esi] = eax;
+        if (~ebx & 1) sheet_refresh(sht, esi, edi, esi + 1, edi + 1);
+        break;
+    case 12:
+        // refresh
+        sht = (struct SHEET*)ebx;
+        sheet_refresh(sht, eax, ecx, esi, edi);
+        break;
+    case 13:
+        // draw a line
+        sht = (struct SHEET*)(ebx & ~1);
+        hrb_api_linewin(sht, eax, ecx, esi, edi, ebp);
+        if (~ebx & 1) sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
+        break;
+    case 14:
+        // close a window
+        sheet_free((struct SHEET*)ebx);
+        break;
+    case 15:
+        // input a key
+        for (;;) {
+            io_cli();
+            if (!fifo32_status(&task->fifo)) {
+                if (eax)
+                    task_sleep(task);
+                else {
+                    io_sti();
+                    reg[7] = -1;
+                    break;
+                }
+            }
+            int i = fifo32_get(&task->fifo);
+            io_sti();
+            if (i <= 1) { // timer for cursor
+                // send 1 since there is no cursor while running app
+                timer_init(cons->timer, &task->fifo, 1);
+                timer_settime(cons->timer, 50);
+            }
+            if (i == 2) { // cursor: ON
+                cons->cur_c = COL8_FFFFFF;
+            }
+            if (i == 3) { // cursor: OFF
+                cons->cur_c = -1;
+            }
+            if (i & KEYSIG_BIT) { // keyboard signal
+                reg[7] = i & ~KEYSIG_BIT;
+                break;
+            }
+        }
         break;
     default:
         dbg_val[0] = edx;
@@ -593,6 +671,29 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
         sprintf(dbg_str[0], "EDX code");
     }
     return NULL;
+}
+
+void hrb_api_linewin(struct SHEET* sht, int x0, int y0, int x1, int y1, int col) {
+    int x, y, len, dx, dy;
+    dx = abs(x1 - x0);
+    dy = abs(y1 - y0);
+    x = x0 << 10;
+    y = y0 << 10;
+    if (dx >= dy) {
+        len = dx + 1;
+        dx = (x0 > x1 ? -1 : 1) << 10;
+        dy = ((y1 - y0 + (y0 > y1 ? -1 : 1)) << 10) / len;
+    } else {
+        len = dy + 1;
+        dy = (y0 > y1 ? -1 : 1) << 10;
+        dx = ((x1 - x0 + (x0 > x1 ? -1 : 1)) << 10) / len;
+    }
+    for (int i = 0; i < len; ++i) {
+        sht->buf[(y >> 10) * sht->bxsize + (x >> 10)] = col;
+        x += dx;
+        y += dy;
+    }
+    return;
 }
 
 int* inthandler00(int* esp) {

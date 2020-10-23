@@ -5,7 +5,7 @@
 #define BUF_SIZ (256)
 #define STR_LIM (1024)
 
-int strlen(const char* s) {
+size_t strlen(const char* s) {
     int len = 0;
     while (s[len] != '\0' && len <= STR_LIM) ++len;
     if (STR_LIM < len) return STR_LIM;
@@ -287,4 +287,11 @@ int sprintf(char* restrict s, const char* restrict format, ...) {
     }
     va_end(ap);
     return len;
+}
+
+uint rand_xor32(void) {
+    static uint y = 2463534242u;
+    y = y ^ (y << 13);
+    y = y ^ (y >> 17);
+    return y = y ^ (y << 5);
 }

@@ -1,10 +1,10 @@
-#define PROGRESS_CHAPTER 22
-#define PROGRESS_PAGE 469
+#define PROGRESS_CHAPTER 23
+#define PROGRESS_PAGE 476
 #define PROGRESS_YEAR 2020
 #define PROGRESS_MONTH 10
 #define PROGRESS_DAY 12
-#define PROGRESS_HOUR 9
-#define PROGRESS_MIN 4
+#define PROGRESS_HOUR 20
+#define PROGRESS_MIN 18
 
 #include "asmfunc.h"
 #include "console.h"
@@ -247,6 +247,10 @@ void HariMain(void) {
                     }
                     if (ch) {
                         if (key_to) {
+                            if (key_ctrl && key_shift && tolower(ch) == 'q') {
+                                cons_putstr0(cons, "Ctrl + Shift + Q\n");
+                                goto QUIT_MAIN;
+                            }
                             if (key_ctrl && tolower(ch) == 'c') { // Ctrl + c
                                 cons = (struct CONSOLE*)*((int*)0x0fec);
                                 dbg_val[0] = cons->cur_x;
@@ -381,14 +385,8 @@ void HariMain(void) {
             }
         }
     }
+QUIT_MAIN:
     return;
-}
-
-uint rand_xor(void) {
-    static uint y = 2463534242;
-    y = y ^ (y << 13);
-    y = y ^ (y >> 17);
-    return y = y ^ (y << 5);
 }
 
 void task_b_main(struct SHEET* sht_win_b) {
