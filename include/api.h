@@ -1,5 +1,4 @@
-#ifndef _API_H_
-#define _API_H_
+#pragma once
 
 void api_putchar(int c);
 void api_putstr0(char* s);
@@ -15,5 +14,3 @@ void api_refreshwin(int win, int x0, int y0, int x1, int y1);
 void api_linewin(int win, int x0, int y0, int x1, int y1, int col);
 void api_closewin(int win);
 int api_getkey(int mode);
-
-#endif

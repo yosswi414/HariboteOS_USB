@@ -1,5 +1,4 @@
-#ifndef _MEMORY_H_
-#define _MEMORY_H_
+#pragma once
 
 #include "general.h"
 
@@ -29,5 +28,3 @@ uint memman_alloc(struct MEMMAN* man, uint size);
 int memman_free(struct MEMMAN* man, uint addr, uint size);
 uint memman_alloc_4k(struct MEMMAN* man, uint size);
 int memman_free_4k(struct MEMMAN* man, uint addr, uint size);
-
-#endif

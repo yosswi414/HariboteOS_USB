@@ -1,5 +1,4 @@
-#ifndef _MYLIBGCC_H_
-#define _MYLIBGCC_H_
+#pragma once
 
 #include "general.h"
 
@@ -30,5 +29,3 @@ int toupper(int ch);
 int tolower(int ch);
 int sprintf(char* restrict s, const char* restrict format, ...);
 uint rand_xor32(void);
-
-#endif

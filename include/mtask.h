@@ -1,5 +1,4 @@
-#ifndef _MTASK_H_
-#define _MTASK_H_
+#pragma once
 
 #include "memory.h"
 #include "fifo.h"
@@ -52,5 +51,3 @@ void task_add(struct TASK* task);
 void task_remove(struct TASK* task);
 void task_switchsub(void);
 void task_idle(void);
-
-#endif

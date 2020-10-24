@@ -1,5 +1,4 @@
-#ifndef _DEVICE_H_
-#define _DEVICE_H_
+#pragma once
 
 #include "fifo.h"
 
@@ -89,5 +88,3 @@ void inthandler2c(int* esp);
 #define MOUSESIG_BIT 0x200
 
 #define MAX_MOUSEQUE 32
-
-#endif

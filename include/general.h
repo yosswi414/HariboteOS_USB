@@ -1,8 +1,4 @@
-#ifndef _GENERAL_H_
-#define _GENERAL_H_
-
-// this header is included by every header
-// (except by itself)
+#pragma once
 
 #ifdef using
 #undef using
@@ -20,5 +16,3 @@
 
 typedef unsigned int uint;
 typedef long unsigned int size_t;
-
-#endif

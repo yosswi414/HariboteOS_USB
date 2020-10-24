@@ -1,5 +1,4 @@
-#ifndef _SHEET_H_
-#define _SHEET_H_
+#pragma once
 
 #include "memory.h"
 #include "mtask.h"
@@ -31,5 +30,3 @@ void sheet_refresh(struct SHEET* sht, int bx0, int by0, int bx1, int by1);
 void sheet_slide(struct SHEET* sht, int vx0, int vy0);
 void sheet_free(struct SHEET* sht);
 void sheet_refreshmap(struct SHTCTL* ctl, int vx0, int vy0, int vx1, int vy1, int h0);
-
-#endif

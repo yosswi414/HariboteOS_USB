@@ -1,5 +1,4 @@
-#ifndef _FILE_H_
-#define _FILE_H_
+#pragma once
 
 struct FILEINFO {
     unsigned char name[8], ext[3], type;
@@ -10,5 +9,3 @@ struct FILEINFO {
 void file_readfat(int* fat, unsigned char* img);
 void file_loadfile(int clustno, int size, char* buf, int* fat, char* img);
 struct FILEINFO* file_search(char* name, struct FILEINFO* finfo, int max);
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef _INTERRUPT_H_
-#define _INTERRUPT_H_
+#pragma once
 
 void init_pic(void);
 void inthandler27(int* esp);
@@ -16,5 +15,3 @@ void inthandler27(int* esp);
 #define PIC1_ICW2 0x00a1
 #define PIC1_ICW3 0x00a1
 #define PIC1_ICW4 0x00a1
-
-#endif

@@ -1,7 +1,7 @@
-#ifndef _CONSOLE_H_
-#define _CONSOLE_H_
+#pragma once
 
 #include "sheet.h"
+#include "timer.h"
 
 struct CONSOLE {
     struct SHEET* sht;
@@ -39,5 +39,3 @@ int* inthandler00(int* esp);
 int* inthandler06(int* esp);
 int* inthandler0c(int* esp);
 int* inthandler0d(int* esp);
-
-#endif

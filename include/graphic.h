@@ -1,5 +1,4 @@
-#ifndef _GRAPHIC_H_
-#define _GRAPHIC_H_
+#pragma once
 
 #include "sheet.h"
 
@@ -30,5 +29,3 @@ void make_textbox8(struct SHEET* sht, int x0, int y0, int sx, int sy, int c);
 #define COL8_840084 13
 #define COL8_008484 14
 #define COL8_848484 15
-
-#endif

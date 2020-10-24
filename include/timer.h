@@ -1,5 +1,4 @@
-#ifndef _TIMER_H_
-#define _TIMER_H_
+#pragma once
 
 #include "general.h"
 #include "fifo.h"
@@ -38,5 +37,3 @@ void timer_free(struct TIMER* timer);
 void timer_init(struct TIMER* timer, struct FIFO32* fifo, int data);
 void timer_settime(struct TIMER* timer, uint timeout);
 void timer_adjust();
-
-#endif
