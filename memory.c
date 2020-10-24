@@ -1,4 +1,5 @@
 #include "memory.h"
+
 #include "asmfunc.h"
 #include "mylibgcc.h"
 
@@ -8,17 +9,17 @@ uint memtest(uint start, uint end) {
 
     // check whether arch is 386 or 486 (or later)
     eflg = io_load_eflags();
-    eflg |= EFLAGS_AC_BIT; // set AC-bit
+    eflg |= EFLAGS_AC_BIT;  // set AC-bit
     io_store_eflags(eflg);
     // in 386 even if we set AC-bit it would be reset automatically
     // which means if set successfully we are in 486 or later
     if (eflg & EFLAGS_AC_BIT) flg486 = 1;
-    eflg &= ~EFLAGS_AC_BIT; // clear AC-bit
+    eflg &= ~EFLAGS_AC_BIT;  // clear AC-bit
     io_store_eflags(eflg);
 
     if (flg486) {
         cr0 = load_cr0();
-        cr0 |= CR0_CACHE_DISABLE; // disable caching
+        cr0 |= CR0_CACHE_DISABLE;  // disable caching
         store_cr0(cr0);
     }
 
@@ -26,7 +27,7 @@ uint memtest(uint start, uint end) {
 
     if (flg486) {
         cr0 = load_cr0();
-        cr0 &= ~CR0_CACHE_DISABLE; // enable caching
+        cr0 &= ~CR0_CACHE_DISABLE;  // enable caching
         store_cr0(cr0);
     }
 
@@ -120,7 +121,7 @@ int memman_free(struct MEMMAN* man, uint addr, uint size) {
         man->free[i].size = size;
         return 0;
     }
-    
+
     ++man->losts;
     man->lostsize += size;
     return -1;

@@ -1,5 +1,6 @@
-#include "asmfunc.h"
 #include "graphic.h"
+
+#include "asmfunc.h"
 #include "sheet.h"
 
 void init_palette(void) {
@@ -19,7 +20,7 @@ void init_palette(void) {
         0x00, 0x00, 0x84, /* 12:暗い青 */
         0x84, 0x00, 0x84, /* 13:暗い紫 */
         0x00, 0x84, 0x84, /* 14:暗い水色 */
-        0x84, 0x84, 0x84 /* 15:暗い灰色 */
+        0x84, 0x84, 0x84  /* 15:暗い灰色 */
     };
     set_palette(0, 15, table_rgb);
     return;
@@ -30,7 +31,7 @@ void init_palette(void) {
 void set_palette(int start, int end, unsigned char* rgb) {
     int i, eflags;
     eflags = io_load_eflags(); /* 割り込み許可フラグの値を記録する */
-    io_cli(); /* 許可フラグを0にして割り込み禁止にする */
+    io_cli();                  /* 許可フラグを0にして割り込み禁止にする */
     io_out8(0x03c8, start);
     for (i = start; i <= end; i++) {
         io_out8(0x03c9, rgb[0] / 4);
@@ -114,8 +115,7 @@ void init_mouse_cursor8(char* mouse, char bc) {
         "**........*OOO*.",
         "*..........*OOO*",
         "............*OO*",
-        ".............***"
-    };
+        ".............***"};
     int x, y;
 
     for (y = 0; y < 16; y++) {

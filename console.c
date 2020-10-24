@@ -1,4 +1,5 @@
 #include "console.h"
+
 #include "asmfunc.h"
 #include "desctable.h"
 #include "device.h"
@@ -54,7 +55,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
         } else {
             int data = fifo32_get(&task->fifo);
             io_sti();
-            if (data <= 1) { // timer for cursor
+            if (data <= 1) {  // timer for cursor
                 timer_init(cons.timer, &task->fifo, 1 - data);
                 if (cons.cur_c >= 0) cons.cur_c = data ? COL8_FFFFFF : COL8_000000;
                 timer_settime(cons.timer, 50);
@@ -105,26 +106,26 @@ void cons_putchar(struct CONSOLE* cons, int chr, char move) {
     s[0] = chr;
     s[1] = '\0';
     switch (s[0]) {
-    case '\t':
-        do {
-            putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, " ", 1);
-            cons->cur_x++;
+        case '\t':
+            do {
+                putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, " ", 1);
+                cons->cur_x++;
+                if (cons->cur_x >= cons->width) cons_newline(cons);
+            } while (cons->cur_x % 4);
+            break;
+        case '\n':
+            cons_newline(cons);
+            break;
+        case '\r':
+            break;
+        default:
             if (cons->cur_x >= cons->width) cons_newline(cons);
-        } while (cons->cur_x % 4);
-        break;
-    case '\n':
-        cons_newline(cons);
-        break;
-    case '\r':
-        break;
-    default:
-        if (cons->cur_x >= cons->width) cons_newline(cons);
-        putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, s, strlen(s));
-        if (move) {
-            cons->cur_x++;
-            if (cons->cur_x >= cons->width) cons_newline(cons);
-        }
-        break;
+            putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, s, strlen(s));
+            if (move) {
+                cons->cur_x++;
+                if (cons->cur_x >= cons->width) cons_newline(cons);
+            }
+            break;
     }
     return;
 }
@@ -160,7 +161,6 @@ void cons_putstr1(struct CONSOLE* cons, const char* s, size_t n) {
 }
 
 void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int memtotal) {
-
     char exit_success = FALSE;
     char buf[64];
 
@@ -526,7 +526,7 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
             start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
 
             shtctl = (struct SHTCTL*)*((int*)0x0fe4);
-            for (int i = 0; i < MAX_SHEETS;++i){
+            for (int i = 0; i < MAX_SHEETS; ++i) {
                 sht = &(shtctl->sheets0[i]);
                 if (sht->flags && sht->task == task) sheet_free(sht);
             }
@@ -564,111 +564,114 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
     */
 
     switch (edx) {
-    case 1:
-        cons_putchar(cons, eax & 0xff, TRUE);
-        break;
-    case 2:
-        cons_putstr0(cons, (char*)ebx + cs_base);
-        break;
-    case 3:
-        cons_putstr1(cons, (char*)ebx + cs_base, ecx);
-        break;
-    case 4:
-        return &(task->tss.esp0);
-    case 5:
-        sht = sheet_alloc(shtctl);
-        sht->task = task;
-        sheet_setbuf(sht, (char*)ebx + cs_base, esi, edi, eax);
-        make_window8((char*)ebx + cs_base, esi, edi, (char*)ecx + cs_base, 0);
-        sheet_slide(sht, 100, 50);
-        sheet_updown(sht, 3); // on task_a
-        reg[7] = (int)sht; // removed when -O2
-        break;
-    case 6:
-        sht = (struct SHEET*)(ebx & 0xfffffffe);
-        putfonts8(sht->buf, sht->bxsize, esi, edi, eax, (char*)ebp + cs_base);
-        if (~ebx & 1) sheet_refresh(sht, esi, edi, esi + ecx * 8, edi + 16);
-        break;
-    case 7:
-        // rect draw api for window
-        sht = (struct SHEET*)(ebx & 0xfffffffe);
-        boxfill8(sht->buf, sht->bxsize, ebp, eax, ecx, esi, edi);
-        if (~ebx & 1) sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
-        break;
-    case 8:
-        // memman init
-        memman_init((struct MEMMAN*)(ebx + cs_base));
-        ecx &= 0xfffffff0;
-        memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
-        break;
-    case 9:
-        // malloc
-        ecx = (ecx + 0x0f) & 0xfffffff0;
-        reg[7] = memman_alloc((struct MEMMAN*)(ebx + cs_base), ecx);
-        break;
-    case 10:
-        // free
-        ecx = (ecx + 0x0f) & 0xfffffff0;
-        memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
-        break;
-    case 11:
-        // draw a dot
-        sht = (struct SHEET*)(ebx & 0xfffffffe);
-        sht->buf[sht->bxsize * edi + esi] = eax;
-        if (~ebx & 1) sheet_refresh(sht, esi, edi, esi + 1, edi + 1);
-        break;
-    case 12:
-        // refresh
-        sht = (struct SHEET*)ebx;
-        sheet_refresh(sht, eax, ecx, esi, edi);
-        break;
-    case 13:
-        // draw a line
-        sht = (struct SHEET*)(ebx & ~1);
-        hrb_api_linewin(sht, eax, ecx, esi, edi, ebp);
-        if (~ebx & 1) sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
-        break;
-    case 14:
-        // close a window
-        sheet_free((struct SHEET*)ebx);
-        break;
-    case 15:
-        // input a key
-        for (;;) {
-            io_cli();
-            if (!fifo32_status(&task->fifo)) {
-                if (eax)
-                    task_sleep(task);
-                else {
-                    io_sti();
-                    reg[7] = -1;
+        case 1:
+            cons_putchar(cons, eax & 0xff, TRUE);
+            break;
+        case 2:
+            cons_putstr0(cons, (char*)ebx + cs_base);
+            break;
+        case 3:
+            cons_putstr1(cons, (char*)ebx + cs_base, ecx);
+            break;
+        case 4:
+            return &(task->tss.esp0);
+        case 5:
+            sht = sheet_alloc(shtctl);
+            sht->task = task;
+            sheet_setbuf(sht, (char*)ebx + cs_base, esi, edi, eax);
+            make_window8((char*)ebx + cs_base, esi, edi, (char*)ecx + cs_base, 0);
+            sheet_slide(sht, 100, 50);
+            sheet_updown(sht, 3);  // on task_a
+            reg[7] = (int)sht;     // removed when -O2
+            break;
+        case 6:
+            sht = (struct SHEET*)(ebx & 0xfffffffe);
+            putfonts8(sht->buf, sht->bxsize, esi, edi, eax, (char*)ebp + cs_base);
+            if (~ebx & 1) sheet_refresh(sht, esi, edi, esi + ecx * 8, edi + 16);
+            break;
+        case 7:
+            // rect draw api for window
+            sht = (struct SHEET*)(ebx & 0xfffffffe);
+            boxfill8(sht->buf, sht->bxsize, ebp, eax, ecx, esi, edi);
+            if (~ebx & 1) sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
+            break;
+        case 8:
+            // memman init
+            memman_init((struct MEMMAN*)(ebx + cs_base));
+            ecx &= 0xfffffff0;
+            memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
+            break;
+        case 9:
+            // malloc
+            ecx = (ecx + 0x0f) & 0xfffffff0;
+            reg[7] = memman_alloc((struct MEMMAN*)(ebx + cs_base), ecx);
+            break;
+        case 10:
+            // free
+            ecx = (ecx + 0x0f) & 0xfffffff0;
+            memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
+            break;
+        case 11:
+            // draw a dot
+            sht = (struct SHEET*)(ebx & 0xfffffffe);
+            sht->buf[sht->bxsize * edi + esi] = eax;
+            if (~ebx & 1) sheet_refresh(sht, esi, edi, esi + 1, edi + 1);
+            break;
+        case 12:
+            // refresh
+            sht = (struct SHEET*)ebx;
+            sheet_refresh(sht, eax, ecx, esi, edi);
+            break;
+        case 13:
+            // draw a line
+            sht = (struct SHEET*)(ebx & ~1);
+            hrb_api_linewin(sht, eax, ecx, esi, edi, ebp);
+            if (~ebx & 1) sheet_refresh(sht, eax, ecx, esi + 1, edi + 1);
+            break;
+        case 14:
+            // close a window
+            sheet_free((struct SHEET*)ebx);
+            break;
+        case 15:
+            // input a key (break if receives 127 (from bootpack.c))
+            for (int i; i != 127;) {
+                io_cli();
+                if (!fifo32_status(&task->fifo)) {
+                    if (eax) task_sleep(task);
+                    else {
+                        io_sti();
+                        reg[7] = -1;
+                        break;
+                    }
+                }
+                i = fifo32_get(&task->fifo);
+                io_sti();
+                switch (i) {
+                    // timer for cursor
+                    case 0:
+                    case 1:
+                        // send 1 since there is no cursor while running app
+                        timer_init(cons->timer, &task->fifo, 1);
+                        timer_settime(cons->timer, 50);
+                        break;
+                    case 2:  // cursor: ON
+                        cons->cur_c = COL8_FFFFFF;
+                        break;
+                    case 3:  // cursor: OFF
+                        cons->cur_c = -1;
+                        break;
+                }
+                if (i & KEYSIG_BIT) {  // keyboard signal
+                    reg[7] = i & ~KEYSIG_BIT;
                     break;
                 }
             }
-            int i = fifo32_get(&task->fifo);
-            io_sti();
-            if (i <= 1) { // timer for cursor
-                // send 1 since there is no cursor while running app
-                timer_init(cons->timer, &task->fifo, 1);
-                timer_settime(cons->timer, 50);
-            }
-            if (i == 2) { // cursor: ON
-                cons->cur_c = COL8_FFFFFF;
-            }
-            if (i == 3) { // cursor: OFF
-                cons->cur_c = -1;
-            }
-            if (i & KEYSIG_BIT) { // keyboard signal
-                reg[7] = i & ~KEYSIG_BIT;
-                break;
-            }
-        }
-        break;
-    default:
-        dbg_val[0] = edx;
-        sprintf(dbg_str[0], "\nUNKNOWN EDX CODE DETECTED.\n");
-        cons_putstr0(cons, dbg_str[0]);
-        sprintf(dbg_str[0], "EDX code");
+            break;
+        default:
+            dbg_val[0] = edx;
+            sprintf(dbg_str[0], "\nUNKNOWN EDX CODE DETECTED.\n");
+            cons_putstr0(cons, dbg_str[0]);
+            sprintf(dbg_str[0], "EDX code");
     }
     return NULL;
 }

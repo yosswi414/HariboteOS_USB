@@ -1,4 +1,5 @@
 #include "window.h"
+
 #include "graphic.h"
 
 void make_window8(unsigned char* buf, int xsize, int ysize, char* title, char act) {
@@ -15,7 +16,7 @@ void make_window8(unsigned char* buf, int xsize, int ysize, char* title, char ac
     return;
 }
 
-void make_wtitle8(unsigned char* buf, int xsize, char* title, char act){
+void make_wtitle8(unsigned char* buf, int xsize, char* title, char act) {
     static char closebtn[14][16] = {
         "OOOOOOOOOOOOOOO@",
         "OQQQQQQQQQQQQQ$@",
@@ -30,8 +31,7 @@ void make_wtitle8(unsigned char* buf, int xsize, char* title, char act){
         "OQQQQQQQQQQQQQ$@",
         "OQQQQQQQQQQQQQ$@",
         "O$$$$$$$$$$$$$$@",
-        "@@@@@@@@@@@@@@@@"
-    };
+        "@@@@@@@@@@@@@@@@"};
     char tc, tbc;
     if (act)
         tc = COL8_FFFFFF, tbc = COL8_000084;
@@ -45,18 +45,18 @@ void make_wtitle8(unsigned char* buf, int xsize, char* title, char act){
         for (int x = 0; x < 16; x++) {
             char c = closebtn[y][x];
             switch (c) {
-            case '@':
-                c = COL8_000000;
-                break;
-            case '$':
-                c = COL8_848484;
-                break;
-            case 'Q':
-                c = COL8_C6C6C6;
-                break;
-            default:
-                c = COL8_FFFFFF;
-                break;
+                case '@':
+                    c = COL8_000000;
+                    break;
+                case '$':
+                    c = COL8_848484;
+                    break;
+                case 'Q':
+                    c = COL8_C6C6C6;
+                    break;
+                default:
+                    c = COL8_FFFFFF;
+                    break;
             }
             buf[(5 + y) * xsize + (xsize - 21 + x)] = c;
         }

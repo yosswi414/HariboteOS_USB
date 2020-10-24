@@ -52,7 +52,7 @@ $(FNC).obj : $(FNC).asm makefile
 	$(NASM) -f elf -o $@ $(FNC).asm -l $(FNC).lst
 
 font.obj: hankaku.txt makefile
-	../HariboteOS_img/tolset/z_tools/makefont.exe hankaku.txt font.bin
+	z_tools/makefont.exe hankaku.txt font.bin
 	objcopy -I binary -O elf32-i386 -B i386 --redefine-sym _binary_font_bin_start=ascii font.bin $@
 
 $(KBD).obj : $(KBD).c $(INCLUDE)/device.h makefile
@@ -77,11 +77,30 @@ $(HRB) : $(ASH).bin $(BTP).bin makefile
 	cat $(ASH).bin $(BTP).bin > $(HRB)
 
 CORE = $(HRB) 
-FILES = asmhead.asm btp.ld readme.md $(INCLUDE)/window.h console.c Sarah_Crowely.txt
+FILES = asmhead.asm btp.ld README.md $(INCLUDE)/window.h console.c Sarah_Crowely.txt builder.txt
 CONTENT = $(CORE) $(FILES)
 
 APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb
 REQ = a_nasm.obj mylibgcc.obj
+
+builder.txt :
+	echo '[$$USER]' > $@
+	echo ${USER} >> $@
+	echo "[hostname]" >> $@
+	echo `hostname` >> $@
+	echo "[date]" >> $@
+	echo `date` >> $@
+	echo "[uname -a]" >> $@
+	echo `uname -a` >> $@
+	echo "[cat /proc/version]" >> $@
+	echo `cat /proc/version` >> $@
+	echo '[bash --version]' >> $@
+	echo `bash --version` >> $@
+	echo "[gcc --version]" >> $@
+	echo `gcc --version` >> $@
+	echo "[make --version]" >> $@
+	echo `make --version` >> $@
+	
 
 $(APPS) : apps/makefile dummy_makeapps makefile
 
@@ -91,8 +110,8 @@ dummy_makeapps : makefile $(REQ)
 
 $(DST) : $(IPL) $(CONTENT) $(APPS) makefile
 	mformat -f 1440 -C -B $(IPL) -i $@ ::
-	$(foreach file, $(CONTENT), mcopy $(file) -i $@ ::;)	
-	$(foreach file, $(APPS), mcopy apps/$(file) -i $@ ::;)	
+	$(foreach file, $(CONTENT), mcopy $(file) -i $@ ::;)
+	$(foreach file, $(APPS), mcopy apps/$(file) -i $@ ::;)
 ###$(foreach file, $(FILES), $(eval $(call mcp,$(file))))
 #dd if=$(IPL) of=$(DST)
 #dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
@@ -103,6 +122,7 @@ $(DST) : $(IPL) $(CONTENT) $(APPS) makefile
 img : $(REQ)
 	$(MAKE) $(DST)
 	$(DEL) dummy_makeapps
+	$(DEL) builder.txt
 
 clean :
 	$(DEL) *.bin

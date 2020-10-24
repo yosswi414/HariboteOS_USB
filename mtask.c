@@ -1,4 +1,5 @@
 #include "mtask.h"
+
 #include "asmfunc.h"
 #include "desctable.h"
 #include "timer.h"
@@ -28,7 +29,7 @@ struct TASK* task_init(struct MEMMAN* memman) {
     task->priority = 2;
     task->level = 0;
     task_add(task);
-    task_switchsub(); // setting level
+    task_switchsub();  // setting level
     load_tr(task->sel);
     task_timer = timer_alloc();
     timer_settime(task_timer, task->priority);
@@ -50,7 +51,7 @@ struct TASK* task_alloc(void) {
         if (taskctl->tasks0[i].flags != TASK_STATE_STOPPED) continue;
         task = &taskctl->tasks0[i];
         task->flags = TASK_STATE_WAITING;
-        task->tss.eflags = 0x00000202; // IF = 1
+        task->tss.eflags = 0x00000202;  // IF = 1
         task->tss.eax = task->tss.ecx = task->tss.edx = task->tss.ebx = 0;
         task->tss.ebp = task->tss.esi = task->tss.edi = 0;
         task->tss.es = task->tss.ds = task->tss.fs = task->tss.gs = 0;
@@ -68,14 +69,14 @@ void task_run(struct TASK* task, int level, int priority) {
     if (level < 0) level = task->level;
     if (priority > 0) task->priority = priority;
     if (task->flags == TASK_STATE_RUNNING && task->level != level) {
-        task_remove(task); // if removed flags will be WAITING
+        task_remove(task);  // if removed flags will be WAITING
     }
     if (task->flags != TASK_STATE_RUNNING) {
         // returning from sleep
         task->level = level;
         task_add(task);
     }
-    taskctl->lv_change = TRUE; // check level in the next switch
+    taskctl->lv_change = TRUE;  // check level in the next switch
     return;
 }
 
@@ -97,7 +98,7 @@ void task_sleep(struct TASK* task) {
     struct TASK* now_task;
     if (task->flags == TASK_STATE_RUNNING) {
         now_task = task_now();
-        task_remove(task); // flags of task will be WAITING
+        task_remove(task);  // flags of task will be WAITING
         if (task == now_task) {
             task_switchsub();
             now_task = task_now();

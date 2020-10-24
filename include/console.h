@@ -8,7 +8,6 @@ struct CONSOLE {
     int cur_x, cur_y;
     int cur_c;
     struct TIMER* timer;
-
     int off_x, off_y;
     int width, height;
 };

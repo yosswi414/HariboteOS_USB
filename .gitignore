@@ -45,3 +45,5 @@ Thumbs.db
 *.img
 *.map
 *.hrb
+.clang-format
+.vscode

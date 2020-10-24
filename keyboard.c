@@ -5,7 +5,7 @@
 #include "mylibgcc.h"
 
 void wait_KBC_sendready(void) {
-    while (io_in8(PORT_KEYSTA) & KEYSTA_SEND_NOTREADY) { }
+    while (io_in8(PORT_KEYSTA) & KEYSTA_SEND_NOTREADY) {}
     return;
 }
 
@@ -26,8 +26,8 @@ void init_keyboard(struct FIFO32* fifo, int data0) {
 
 void inthandler21(int* esp) {
     int data;
-    io_out8(PIC0_OCW2, 0x61); // notify PIC that IRQ01 has been accepted
-    data = io_in8(PORT_KEYDAT); // receive key code
+    io_out8(PIC0_OCW2, 0x61);    // notify PIC that IRQ01 has been accepted
+    data = io_in8(PORT_KEYDAT);  // receive key code
     fifo32_put(key_fifo, data + key_offset);
     return;
 }

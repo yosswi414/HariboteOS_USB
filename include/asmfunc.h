@@ -8,9 +8,9 @@ extern char ascii[0x1000];
 #define ADDR_DISKIMG 0x0100000
 
 struct BOOTINFO {
-    unsigned char cyls; // how far the data on the disk is loaded to boot sector
-    unsigned char leds; // the state of keyboard LED when boot
-    unsigned char vmode; // video mode: decide n-bit color
+    unsigned char cyls;   // how far the data on the disk is loaded to boot sector
+    unsigned char leds;   // the state of keyboard LED when boot
+    unsigned char vmode;  // video mode: decide n-bit color
     unsigned char reserve;
     short scrnx, scrny;
     unsigned char* vram;
@@ -46,5 +46,5 @@ void farjmp(int eip, int cs);
 void farcall(int eip, int cs);
 void asm_cons_putchar();
 void asm_hrb_api();
-void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
+void start_app(int eip, int cs, int esp, int ds, int* tss_esp0);
 void asm_end_app(int eip);

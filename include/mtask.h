@@ -1,10 +1,10 @@
 #pragma once
 
-#include "memory.h"
 #include "fifo.h"
+#include "memory.h"
 
 #define MAX_TASKS 1000
-#define TASK_GDT0 3 // beginning point of TSS in GDT
+#define TASK_GDT0 3  // beginning point of TSS in GDT
 
 #define TASK_STATE_STOPPED 0
 #define TASK_STATE_WAITING 1
@@ -29,14 +29,14 @@ struct TASK {
 };
 
 struct TASKLEVEL {
-    int running; // number of tasks running
-    int now; // indicates a task currently being processed
+    int running;  // number of tasks running
+    int now;      // indicates a task currently being processed
     struct TASK* tasks[MAX_TASK_INLVTASKS];
 };
 
 struct TASKCTL {
-    int now_lv; // level running
-    char lv_change; // if true, level will be changed in the next switch
+    int now_lv;      // level running
+    char lv_change;  // if true, level will be changed in the next switch
     struct TASKLEVEL level[MAX_TASK_LEVELS];
     struct TASK tasks0[MAX_TASKS];
 };

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "general.h"
 #include "fifo.h"
+#include "general.h"
 
 // PIT; Programmable Interval Timer
 

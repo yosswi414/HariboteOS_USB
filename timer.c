@@ -1,4 +1,5 @@
 #include "timer.h"
+
 #include "asmfunc.h"
 #include "fifo.h"
 #include "general.h"
@@ -34,14 +35,14 @@ extern struct TIMER* task_timer;
 void inthandler20(int* esp) {
     char ts = 0;
 
-    io_out8(PIC0_OCW2, 0x60); // ACK
+    io_out8(PIC0_OCW2, 0x60);  // ACK
     if (!ENABLE_TIMECNT) return;
     timerctl.count++;
     if (timerctl.next > timerctl.count) return;
     struct TIMER* timer;
     for (timer = timerctl.t0; timer->timeout <= timerctl.count; timer = timer->next) {
         timer->flags = TIMER_FLAGS_ALLOC;
-        if(timer != task_timer)
+        if (timer != task_timer)
             fifo32_put(timer->fifo, timer->data);
         else
             ts = 1;

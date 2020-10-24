@@ -193,9 +193,9 @@ void HariMain(void) {
             task_sleep(task_a);
             io_sti();
         } else {
-            sprintf(buf, "fifo:[%3d]", fifo32_status(&fifo));
-            putfonts8_sht(sht_back, 0, 97, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
             int data = fifo32_get(&fifo);
+            sprintf(buf, "fifo:[%3d](%4d)", fifo32_status(&fifo), data);
+            putfonts8_sht(sht_back, 0, 17, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
             io_sti();
             if (data & KEYSIG_BIT) { // KEYBOARD
                 data &= ~KEYSIG_BIT;
@@ -254,7 +254,8 @@ void HariMain(void) {
                             if (key_ctrl && tolower(ch) == 'c') { // Ctrl + c
                                 cons = (struct CONSOLE*)*((int*)0x0fec);
                                 if (task_cons->tss.ss0) {
-                                    cons_putstr0(cons, "User Interrupt Detected.\nThe current process will be terminated.\n");
+                                    cons_putstr0(cons, "User Interrupt Detected.\nThe current process will be terminated...\n");
+                                    fifo32_put(&task_cons->fifo, 127); // sends 127 to break for loop immediately
                                     io_cli();
                                     task_cons->tss.eax = (int)&(task_cons->tss.esp0);
                                     task_cons->tss.eip = (int)asm_end_app;
@@ -371,6 +372,8 @@ void HariMain(void) {
                     sprintf(buf, "%d / %d", timerctl.next, timerctl.count);
                     putfonts8_sht(sht_back, 70, binfo->scrny - 45, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
 
+                    break;
+                case 127:
                     break;
                 }
             }

@@ -1,4 +1,5 @@
 #include "mylibgcc.h"
+
 #include "asmfunc.h"
 #include "general.h"
 
@@ -45,7 +46,7 @@ char* strcat(char* restrict s1, const char* restrict s2) {
     char* dst = s1;
     const char* src = s2;
     while (*dst) dst++;
-    while (*(dst++) = *(src++)) { }
+    while (*(dst++) = *(src++)) {}
     return s1;
 }
 
@@ -171,7 +172,7 @@ int isspace(int ch) {
     return FALSE;
 }
 
-int isxdigit(int ch){
+int isxdigit(int ch) {
     return isdigit(ch) || ('A' <= toupper(ch) && toupper(ch) <= 'F');
 }
 
@@ -203,8 +204,8 @@ int sprintf(char* restrict s, const char* restrict format, ...) {
             //int fill = FALSE;
             int upper = FALSE;
             char fill_ch = ' ';
-            int mfw = 0; // minimum field width
-            int prec = 0; // precision
+            int mfw = 0;   // minimum field width
+            int prec = 0;  // precision
             str[0] = filbuf[0] = '\0';
             ++ptr;
 
@@ -228,34 +229,34 @@ int sprintf(char* restrict s, const char* restrict format, ...) {
                 }
             }
             switch (*ptr) {
-            case 'c':
-                str[0] = va_arg(ap, int); // warning: 'char' is promoted to 'int' when passed through '...'
-                str[1] = '\0';
-                break;
-            case 's':
-                p = va_arg(ap, char*);
-                if (len + strlen(p) + 1 > BUF_SIZ) is_valid = FALSE;
-                strcpy(str, p);
-                break;
-            case 'd':
-                itoa(va_arg(ap, int), str, 10);
-                break;
-            case 'u':
-                utoa(va_arg(ap, uint), str, 10);
-                break;
-            case 'o':
-                utoa(va_arg(ap, uint), str, 8);
-                break;
-            case 'X':
-                upper = TRUE;
-            case 'x':
-                utoa(va_arg(ap, uint), str, 16);
-                break;
-            case 'b':
-                utoa(va_arg(ap, uint), str, 2);
-                break;
-            default:
-                is_valid = FALSE;
+                case 'c':
+                    str[0] = va_arg(ap, int);  // warning: 'char' is promoted to 'int' when passed through '...'
+                    str[1] = '\0';
+                    break;
+                case 's':
+                    p = va_arg(ap, char*);
+                    if (len + strlen(p) + 1 > BUF_SIZ) is_valid = FALSE;
+                    strcpy(str, p);
+                    break;
+                case 'd':
+                    itoa(va_arg(ap, int), str, 10);
+                    break;
+                case 'u':
+                    utoa(va_arg(ap, uint), str, 10);
+                    break;
+                case 'o':
+                    utoa(va_arg(ap, uint), str, 8);
+                    break;
+                case 'X':
+                    upper = TRUE;
+                case 'x':
+                    utoa(va_arg(ap, uint), str, 16);
+                    break;
+                case 'b':
+                    utoa(va_arg(ap, uint), str, 2);
+                    break;
+                default:
+                    is_valid = FALSE;
             }
             if (len + strlen(str) + 1 > BUF_SIZ) is_valid = FALSE;
             if (is_valid) {
@@ -280,7 +281,7 @@ int sprintf(char* restrict s, const char* restrict format, ...) {
         if (!is_valid) break;
     }
     if (!is_valid) {
-        strcpy(s, "sprintf(): failed to convert."); //return -1;
+        strcpy(s, "sprintf(): failed to convert.");  //return -1;
         len = EOF;
     } else {
         strcpy(s, buf);

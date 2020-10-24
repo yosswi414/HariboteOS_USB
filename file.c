@@ -1,4 +1,5 @@
 #include "file.h"
+
 #include "general.h"
 #include "mylibgcc.h"
 
@@ -38,9 +39,9 @@ struct FILEINFO* file_search(char* name, struct FILEINFO* finfo, int max) {
             s[j++] = toupper(name[i]);
     }
 
-    for (int i = 0; i < max; ++i){
+    for (int i = 0; i < max; ++i) {
         if (!finfo[i].name[0]) break;
-        if(!(finfo[i].type & 0x18)){
+        if (!(finfo[i].type & 0x18)) {
             if (!strncmp(finfo[i].name, s, 11)) return finfo + i;
         }
     }
