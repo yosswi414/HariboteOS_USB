@@ -1,10 +1,10 @@
 #define PROGRESS_CHAPTER 23
-#define PROGRESS_PAGE 476
+#define PROGRESS_PAGE 493
 #define PROGRESS_YEAR 2020
 #define PROGRESS_MONTH 10
-#define PROGRESS_DAY 12
-#define PROGRESS_HOUR 20
-#define PROGRESS_MIN 18
+#define PROGRESS_DAY 24
+#define PROGRESS_HOUR 15
+#define PROGRESS_MIN 15
 
 #include "asmfunc.h"
 #include "console.h"
