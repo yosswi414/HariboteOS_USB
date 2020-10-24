@@ -1,5 +1,6 @@
 
 MAKE	= make -r
+DEL = rm -f
 # -r (--no-builtin-rules) : eliminate use of the built-in implicit rules
 ASH	= asmhead
 BTP	= bootpack
@@ -30,13 +31,12 @@ CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
 CFLAGS_O0 = -O0 $(CFLAGS_BASE)
 CFLAGS_SW = $(CFLAGS_O2)
-DEL = rm -f
+
 # デフォルト動作
 
 .PHONY : default clean img evacuate mcp
 
 default :
-	#$(MAKE) clean
 	$(MAKE) img
 
 # ファイル生成規則
@@ -63,6 +63,9 @@ $(MOU).obj : $(MOU).c device.h makefile
 $(BTP).obj : $(BTP).c makefile
 	$(CC) $(CFLAGS_SW) $(BTP).c -o $@
 
+a_nasm.obj : a_nasm.asm makefile
+	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm
+
 %.obj : %.c %.h makefile
 	$(CC) $(CFLAGS_SW) $*.c -o $@
 
@@ -72,31 +75,23 @@ $(BTP).bin : $(OBJS) $(LKS) makefile
 $(HRB) : $(ASH).bin $(BTP).bin makefile
 	cat $(ASH).bin $(BTP).bin > $(HRB)
 
-a_nasm.obj : a_nasm.asm makefile
-	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm
+CORE = $(HRB) 
+FILES = asmhead.asm btp.ld readme.md window.h console.c Sarah_Crowely.txt
+CONTENT = $(CORE) $(FILES)
 
-crack1.hrb : crack1.c app.ld makefile
-	$(CC) $(CFLAGS_SW) -o crack1.obj crack1.c
-	ld -Map=crack1.map -m elf_i386 -T app.ld -o $@ crack1.obj
+APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb
+REQ = a_nasm.obj mylibgcc.obj
 
-bugzero.hrb : bug_zerodiv.c mylibgcc.obj a_nasm.obj app.ld makefile
-	$(CC) $(CFLAGS_SW) -o bug_zerodiv.obj bug_zerodiv.c
-	ld -Map=bugzero.map -m elf_i386 -T app.ld -o $@ bug_zerodiv.obj mylibgcc.obj a_nasm.obj
+$(APPS) : apps/makefile dummy_makeapps makefile
 
-%.hrb : %.asm app.ld makefile
-	# $*
-	$(NASM) -f elf32 -o $*.obj $*.asm -l $*.lst
-	ld -Map=$*.map -m elf_i386 -T app.ld -o $@ $*.obj
+dummy_makeapps : makefile $(REQ)
+	touch dummy_makeapps
+	cd apps && $(MAKE)
 
-# some illegal operation could be removed by optimization
-%.hrb : %.c a_nasm.obj app.ld makefile
-	$(CC) $(CFLAGS_SW) -o $*.obj -l $*.lst $*.c
-	ld -Map=$*.map -m elf_i386 -T app.ld -o $@ $*.obj a_nasm.obj
-
-FILES = $(HRB) walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb asmhead.asm fifo.c btp.ld readme.md window.h console.c Sarah_Crowely.txt
-$(DST) : $(IPL) $(FILES) makefile
+$(DST) : $(IPL) $(CONTENT) $(APPS) makefile
 	mformat -f 1440 -C -B $(IPL) -i $@ ::
-	$(foreach file, $(FILES), mcopy $(file) -i $@ ::;)	
+	$(foreach file, $(CONTENT), mcopy $(file) -i $@ ::;)	
+	$(foreach file, $(APPS), mcopy apps/$(file) -i $@ ::;)	
 ###$(foreach file, $(FILES), $(eval $(call mcp,$(file))))
 #dd if=$(IPL) of=$(DST)
 #dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
@@ -104,8 +99,9 @@ $(DST) : $(IPL) $(FILES) makefile
 #dd if=$(HRB) of=$(DST) seek=16896 oflag=seek_bytes ibs=512 conv=sync
 #$(foreach file, $(FILES_DD), dd if=$(file) of=$(DST) oflag=append ibs=512 conv=sync,notrunc;)
 
-img :
+img : $(REQ)
 	$(MAKE) $(DST)
+	$(DEL) dummy_makeapps
 
 clean :
 	$(DEL) *.bin
@@ -115,6 +111,7 @@ clean :
 	$(DEL) *.sys
 	$(DEL) *.map
 	$(DEL) *.hrb
+	(cd apps; $(MAKE) clean)
 
 evacuate :
 	git add ./*

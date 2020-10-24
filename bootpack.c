@@ -253,15 +253,6 @@ void HariMain(void) {
                             }
                             if (key_ctrl && tolower(ch) == 'c') { // Ctrl + c
                                 cons = (struct CONSOLE*)*((int*)0x0fec);
-                                dbg_val[0] = cons->cur_x;
-                                sprintf(dbg_str[0], "Cursor X");
-                                dbg_val[1] = cons->cur_y;
-                                sprintf(dbg_str[1], "Cursor Y");
-                                cons_putstr0(cons, "^C\n");
-                                dbg_val[2] = cons->cur_x;
-                                sprintf(dbg_str[2], "Cursor X\'");
-                                dbg_val[3] = cons->cur_y;
-                                sprintf(dbg_str[3], "Cursor Y\'");
                                 if (task_cons->tss.ss0) {
                                     cons_putstr0(cons, "User Interrupt Detected.\nThe current process will be terminated.\n");
                                     io_cli();
