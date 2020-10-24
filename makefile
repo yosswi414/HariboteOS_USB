@@ -2,6 +2,7 @@
 MAKE	= make -r
 DEL = rm -f
 # -r (--no-builtin-rules) : eliminate use of the built-in implicit rules
+INCLUDE = ./include
 ASH	= asmhead
 BTP	= bootpack
 IPL	= ipl.bin
@@ -9,7 +10,7 @@ FNC	= naskfunc
 HRB = haribote.sys
 DST = usbboot.img
 NASM = nasm
-CC = gcc
+CC = gcc -I $(INCLUDE)
 LIB = mylibgcc
 DSC = desctable
 GRP = graphic
@@ -54,10 +55,10 @@ font.obj: hankaku.txt makefile
 	../HariboteOS_img/tolset/z_tools/makefont.exe hankaku.txt font.bin
 	objcopy -I binary -O elf32-i386 -B i386 --redefine-sym _binary_font_bin_start=ascii font.bin $@
 
-$(KBD).obj : $(KBD).c device.h makefile
+$(KBD).obj : $(KBD).c $(INCLUDE)/device.h makefile
 	$(CC) $(CFLAGS_SW) $(KBD).c -o $@
 
-$(MOU).obj : $(MOU).c device.h makefile
+$(MOU).obj : $(MOU).c $(INCLUDE)/device.h makefile
 	$(CC) $(CFLAGS_SW) $(MOU).c -o $@
 
 $(BTP).obj : $(BTP).c makefile
@@ -66,7 +67,7 @@ $(BTP).obj : $(BTP).c makefile
 a_nasm.obj : a_nasm.asm makefile
 	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm
 
-%.obj : %.c %.h makefile
+%.obj : %.c $(INCLUDE)/%.h makefile
 	$(CC) $(CFLAGS_SW) $*.c -o $@
 
 $(BTP).bin : $(OBJS) $(LKS) makefile
@@ -76,7 +77,7 @@ $(HRB) : $(ASH).bin $(BTP).bin makefile
 	cat $(ASH).bin $(BTP).bin > $(HRB)
 
 CORE = $(HRB) 
-FILES = asmhead.asm btp.ld readme.md window.h console.c Sarah_Crowely.txt
+FILES = asmhead.asm btp.ld readme.md $(INCLUDE)/window.h console.c Sarah_Crowely.txt
 CONTENT = $(CORE) $(FILES)
 
 APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb

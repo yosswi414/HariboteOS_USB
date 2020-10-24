@@ -4,7 +4,8 @@ DEL = rm -f
 # -r (--no-builtin-rules) : eliminate use of the built-in implicit rules
 
 NASM = nasm
-CC = gcc -I../
+INCLUDE = ../include
+CC = gcc -I $(INCLUDE)
 
 CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
