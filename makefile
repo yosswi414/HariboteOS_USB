@@ -40,6 +40,17 @@ CFLAGS_SW = $(CFLAGS_O2)
 default :
 	$(MAKE) img
 
+VDI = usbboot.vdi
+VM_NAME = HariboteOS_USB
+VM_SCTL = SATA
+
+run :
+	$(MAKE) img
+	-rm -f ./*.vdi
+	vboxmanage convertfromraw -format VDI $(DST) $(VDI)
+	vboxmanage internalcommands sethduuid $(VDI) `vboxmanage list hdds | grep -e "^UUID" | awk '{print $$2}'`
+	vboxmanage startvm "HariboteOS_USB"
+
 # ファイル生成規則
 
 $(IPL) : ipl.asm makefile
@@ -132,6 +143,7 @@ clean :
 	$(DEL) *.sys
 	$(DEL) *.map
 	$(DEL) *.hrb
+	$(DEL) *.vdi
 	(cd apps; $(MAKE) clean)
 
 evacuate :

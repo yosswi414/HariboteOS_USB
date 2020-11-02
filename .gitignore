@@ -45,5 +45,7 @@ Thumbs.db
 *.img
 *.map
 *.hrb
+*.vdi
 .clang-format
 .vscode
+z_tools/
