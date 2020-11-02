@@ -50,6 +50,9 @@ run :
 	vboxmanage convertfromraw -format VDI $(DST) $(VDI)
 	vboxmanage internalcommands sethduuid $(VDI) `vboxmanage list hdds | grep -e "^UUID" | awk '{print $$2}'`
 	vboxmanage startvm "HariboteOS_USB"
+#vboxmanage storagectl $(VM_NAME) --name $(VM_SCTL) --portcount 1 --remove
+#vboxmanage storagectl $(VM_NAME) --name $(VM_SCTL) --add sata --controller IntelAHCI --portcount 1 --bootable on
+#vboxmanage storageattach $(VM_NAME) --storagectl $(VM_SCTL) --device 0 --port 0 --type hdd --medium $(VDI)
 
 # ファイル生成規則
 
