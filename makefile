@@ -27,6 +27,9 @@ MUL = mtask
 CON = console
 FIL = file
 
+PROG_CHPT = 24
+PROG_PAGE = 505
+
 OBJS = $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
 CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
@@ -40,19 +43,28 @@ CFLAGS_SW = $(CFLAGS_O2)
 default :
 	$(MAKE) img
 
+
+
+VBM = vboxmanage
 VDI = usbboot.vdi
 VM_NAME = HariboteOS_USB
 VM_SCTL = SATA
+VM_UUID := 0
 
-run :
-	$(MAKE) img
-	-rm -f ./*.vdi
-	vboxmanage convertfromraw -format VDI $(DST) $(VDI)
-	vboxmanage internalcommands sethduuid $(VDI) `vboxmanage list hdds | grep -e "^UUID" | awk '{print $$2}'`
-	vboxmanage startvm "HariboteOS_USB"
-#vboxmanage storagectl $(VM_NAME) --name $(VM_SCTL) --portcount 1 --remove
-#vboxmanage storagectl $(VM_NAME) --name $(VM_SCTL) --add sata --controller IntelAHCI --portcount 1 --bootable on
-#vboxmanage storageattach $(VM_NAME) --storagectl $(VM_SCTL) --device 0 --port 0 --type hdd --medium $(VDI)
+run : $(VDI)
+	$(VBM) startvm "HariboteOS_USB"
+
+$(VDI) : img
+ifndef $(type $(VBM) > /dev/null 2>&1; echo $?)
+	$(eval VBM := vboxmanage.exe)
+endif
+	-$(DEL) *.vdi
+	$(VBM) convertfromraw -format VDI $(DST) $(VDI)
+	$(eval VM_UUID := $(shell $(VBM) list hdds | grep -e "^UUID" | awk '{print $$2}'))
+# $(VBM) storagectl $(VM_NAME) --name $(VM_SCTL) --portcount 1 --remove
+	$(VBM) internalcommands sethduuid $(VDI) $(VM_UUID)
+	-$(VBM) storagectl $(VM_NAME) --name $(VM_SCTL) --add sata --controller IntelAHCI --portcount 1 --bootable on
+	-$(VBM) storageattach $(VM_NAME) --storagectl $(VM_SCTL) --device 0 --port 0 --type hdd --medium $(VDI)
 
 # ファイル生成規則
 
@@ -76,7 +88,14 @@ $(MOU).obj : $(MOU).c $(INCLUDE)/device.h makefile
 	$(CC) $(CFLAGS_SW) $(MOU).c -o $@
 
 $(BTP).obj : $(BTP).c makefile
-	$(CC) $(CFLAGS_SW) $(BTP).c -o $@
+	$(CC) $(CFLAGS_SW) $(BTP).c -o $@ \
+		-D'PROGRESS_CHAPTER=$(PROG_CHPT)' \
+		-D'PROGRESS_PAGE=$(PROG_PAGE)' \
+		-D'PROGRESS_YEAR="$(shell date '+%Y')"'  \
+		-D'PROGRESS_MONTH="$(shell date '+%m')"' \
+		-D'PROGRESS_DAY="$(shell date '+%d')"' \
+		-D'PROGRESS_HOUR="$(shell date '+%H')"' \
+		-D'PROGRESS_MIN="$(shell date '+%M')"'
 
 a_nasm.obj : a_nasm.asm makefile
 	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm
@@ -116,11 +135,8 @@ builder.txt :
 	echo `make --version` >> $@
 	
 
-$(APPS) : apps/makefile dummy_makeapps makefile
-
-dummy_makeapps : makefile $(REQ)
-	touch dummy_makeapps
-	cd apps && $(MAKE)
+$(APPS) : apps/makefile makefile
+	(cd apps; $(MAKE))
 
 $(DST) : $(IPL) $(CONTENT) $(APPS) makefile
 	mformat -f 1440 -C -B $(IPL) -i $@ ::
@@ -135,7 +151,6 @@ $(DST) : $(IPL) $(CONTENT) $(APPS) makefile
 
 img : $(REQ)
 	$(MAKE) $(DST)
-	$(DEL) dummy_makeapps
 	$(DEL) builder.txt
 
 clean :

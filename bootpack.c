@@ -1,10 +1,24 @@
-#define PROGRESS_CHAPTER 23
-#define PROGRESS_PAGE 493
-#define PROGRESS_YEAR 2020
-#define PROGRESS_MONTH 10
-#define PROGRESS_DAY 24
-#define PROGRESS_HOUR 15
-#define PROGRESS_MIN 15
+#ifndef PROGRESS_CHAPTER
+#define PROGRESS_CHAPTER -1
+#endif
+#ifndef PROGRESS_PAGE
+#define PROGRESS_PAGE -1
+#endif
+#ifndef PROGRESS_YEAR
+#define PROGRESS_YEAR -1
+#endif
+#ifndef PROGRESS_MONTH
+#define PROGRESS_MONTH -1
+#endif
+#ifndef PROGRESS_DAY
+#define PROGRESS_DAY -1
+#endif
+#ifndef PROGRESS_HOUR
+#define PROGRESS_HOUR -1
+#endif
+#ifndef PROGRESS_MIN
+#define PROGRESS_MIN -1
+#endif
 
 #include "asmfunc.h"
 #include "console.h"
@@ -44,11 +58,13 @@ void HariMain(void) {
     char buf[128];
     int fifobuf[FIFO_SIZ], keycmd_buf[32];
     struct TIMER* timer[1];
+    int x, y;
     int mx, my;
+    int mmx = -1, mmy = -1;
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct SHTCTL* shtctl;
-    struct SHEET *sht_back, *sht_mouse, *sht_win;
+    struct SHEET *sht_back, *sht_mouse, *sht_win, *sht = NULL;
     unsigned char *buf_back, buf_mouse[256], *buf_win;
 
     struct TASK* task_a;
@@ -56,17 +72,18 @@ void HariMain(void) {
     struct CONSOLE* cons;
 
     int key_to = 0, key_shift = 0, key_ctrl = 0, key_leds = (binfo->leds >> 4) & 7, keycmd_wait = -1;
+    struct SHEET* key_win;
 
     init_gdtidt();
     init_pic();
-    io_sti(); // remove a prohibition of interrupt since IDT/PIC initialization has finished
+    io_sti();  // remove a prohibition of interrupt since IDT/PIC initialization has finished
     fifo32_init(&fifo, sizeof(fifobuf) / sizeof(int), fifobuf, NULL);
     init_keyboard(&fifo, KEYSIG_BIT);
     enable_mouse(&fifo, MOUSESIG_BIT, &mdec);
 
     init_pit();
-    io_out8(PIC0_IMR, 0xf8); // accept interrupt by IRQ0-2
-    io_out8(PIC1_IMR, 0xef); // accept interrupt by IRQ12
+    io_out8(PIC0_IMR, 0xf8);  // accept interrupt by IRQ0-2
+    io_out8(PIC1_IMR, 0xef);  // accept interrupt by IRQ12
 
     fifo32_init(&keycmd, sizeof(keycmd_buf) / sizeof(int), keycmd_buf, NULL);
 
@@ -81,7 +98,7 @@ void HariMain(void) {
     shtctl = shtctl_init(memman, binfo->vram, binfo->scrnx, binfo->scrny);
     task_a = task_init(memman);
     fifo.task = task_a;
-    task_run(task_a, 1, 0); // level: max
+    task_run(task_a, 1, 0);  // level: max
 
     // sht_back
     sht_back = sheet_alloc(shtctl);
@@ -105,7 +122,7 @@ void HariMain(void) {
         putfonts8_sht(sht_back, 0, 33, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
         */
 
-        sprintf(buf, "%04d/%02d/%02d %02d:%02d JST", PROGRESS_YEAR, PROGRESS_MONTH, PROGRESS_DAY, PROGRESS_HOUR, PROGRESS_MIN);
+        sprintf(buf, "%04s/%02s/%02s %02s:%02s JST", PROGRESS_YEAR, PROGRESS_MONTH, PROGRESS_DAY, PROGRESS_HOUR, PROGRESS_MIN);
         putfonts8_sht(sht_back, 70, sht_back->bysize - 21, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
 
         sprintf(buf, "size: %d x %d", sht_back->bxsize, sht_back->bysize);
@@ -127,7 +144,7 @@ void HariMain(void) {
     char textbox[maxline][maxchar];
     int cursor_col = COL8_FFFFFF;
     int cursor_line = 0;
-    int linech[maxline] = { 0 };
+    int linech[maxline] = {0};
     sprintf(buf, "text here");
     putfonts8_sht(sht_win, 10, 25, COL8_000000, COL8_C6C6C6, buf, strlen(buf));
 
@@ -156,7 +173,7 @@ void HariMain(void) {
     task_cons->tss.ss = task_cons->tss.ds = task_cons->tss.fs = task_cons->tss.gs = 1 * 8;
     *((int*)(task_cons->tss.esp + 4)) = (int)sht_cons;
     *((int*)(task_cons->tss.esp + 8)) = memtotal;
-    task_run(task_cons, 2, 2); // level = priority = 2
+    task_run(task_cons, 2, 2);  // level = priority = 2
 
     sheet_slide(sht_back, 0, 0);
     sheet_slide(sht_cons, 350, 16);
@@ -168,13 +185,17 @@ void HariMain(void) {
     sheet_updown(sht_win, 2);
     sheet_updown(sht_mouse, 3);
 
-    int timeitv[] = { 50 };
-    int timedat[] = { 1 };
+    int timeitv[] = {50};
+    int timedat[] = {1};
     for (int i = 0; i < 1; ++i) {
         timer[i] = timer_alloc();
         timer_init(timer[i], &fifo, timedat[i]);
         timer_settime(timer[i], timeitv[i]);
     }
+
+    key_win = sht_win;
+    sht_cons->task = task_cons;
+    sht_cons->flags |= SHEET_FLAGS_CURSOR;
 
     // はい、よーいスタート
     ENABLE_TIMECNT = TRUE;
@@ -197,14 +218,18 @@ void HariMain(void) {
             sprintf(buf, "fifo:[%3d](%4d)", fifo32_status(&fifo), data);
             putfonts8_sht(sht_back, 0, 17, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
             io_sti();
-            if (data & KEYSIG_BIT) { // KEYBOARD
+            if(!key_win->flags){
+                key_win = shtctl->sheets[shtctl->top - 1];
+                cursor_col = keywin_on(key_win, sht_win, cursor_col);
+            }
+            if (data & KEYSIG_BIT) {  // KEYBOARD
                 data &= ~KEYSIG_BIT;
                 sprintf(buf, "%02X %08b", data, data);
                 putfonts8_sht(sht_back, 0, 49, COL8_FFFFFF, COL8_008484, buf, 11);
 
-                if (data == 0xfa) // led info received
+                if (data == 0xfa)  // led info received
                     keycmd_wait = -1;
-                if (data == 0xfe) { // led info not reached
+                if (data == 0xfe) {  // led info not reached
                     wait_KBC_sendready();
                     io_out8(PORT_KEYDAT, keycmd_wait);
                 }
@@ -221,20 +246,20 @@ void HariMain(void) {
                 if (!release) {
                     char ch = keycode_tochar(data, !!key_shift ^ !!(key_leds & 4));
                     linech[cursor_line];
-                    if (data == 0x1c) { // Enter
-                        if (key_to)
+                    if (data == 0x1c) {  // Enter
+                        if (key_win != sht_win)
                             fifo32_put(&task_cons->fifo, KEYSIG_BIT | '\n');
-                        else {
+                        else if(key_win == sht_win){
                             if (!ch && cursor_line + 1 < maxline) {
                                 putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, COL8_FFFFFF, " ", 1);
                                 cursor_line++;
                             }
                         }
                     }
-                    if (data == 0x0e) { // Backspace
-                        if (key_to)
+                    if (data == 0x0e) {  // Backspace
+                        if (key_win != sht_win)
                             fifo32_put(&task_cons->fifo, KEYSIG_BIT | '\b');
-                        else {
+                        else if(key_win == sht_win){
                             if (!ch && (cursor_line > 0 || linech[cursor_line] > 0)) {
                                 putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, COL8_FFFFFF, " ", 1);
                                 if (linech[cursor_line] > 0) {
@@ -246,25 +271,26 @@ void HariMain(void) {
                         }
                     }
                     if (ch) {
-                        if (key_to) {
+                        if (key_win != sht_win) {
                             if (key_ctrl && key_shift && tolower(ch) == 'q') {
                                 cons_putstr0(cons, "Ctrl + Shift + Q\n");
                                 goto QUIT_MAIN;
                             }
-                            if (key_ctrl && tolower(ch) == 'c') { // Ctrl + c
+                            if (key_ctrl && tolower(ch) == 'c') {  // Ctrl + c
                                 cons = (struct CONSOLE*)*((int*)0x0fec);
                                 if (task_cons->tss.ss0) {
-                                    cons_putstr0(cons, "User Interrupt Detected.\nThe current process will be terminated...\n");
-                                    fifo32_put(&task_cons->fifo, 127); // sends 127 to break for loop immediately
+                                    cons_putstr0(cons, "User Interrupt Detected.\n");
+                                    cons_putstr0(cons, "The current process will be terminated...\n");
+                                    fifo32_put(&task_cons->fifo, 127);  // sends 127 to break for loop immediately
                                     io_cli();
                                     task_cons->tss.eax = (int)&(task_cons->tss.esp0);
                                     task_cons->tss.eip = (int)asm_end_app;
                                     io_sti();
-                                } else
-                                    cons_putchar(cons, '>', TRUE);
+                                }
+                                cons_putchar(cons, '>', TRUE);
                             } else
                                 fifo32_put(&task_cons->fifo, ch | KEYSIG_BIT);
-                        } else {
+                        } else if(key_win == sht_win) {
                             if (cursor_line + 1 < maxline || linech[cursor_line] + 1 < maxchar) {
                                 textbox[cursor_line][linech[cursor_line]++] = ch;
                                 if (linech[cursor_line] + 1 == maxchar && cursor_line + 1 < maxline)
@@ -272,42 +298,50 @@ void HariMain(void) {
                             }
                         }
                     }
-                    if (data == 0x2a) { // LShift
+                    if (data == 0x2a) {  // LShift
                         key_shift |= 1;
                     }
-                    if (data == 0x36) { // RShift
+                    if (data == 0x36) {  // RShift
                         key_shift |= 2;
                     }
-                    if (data == 0x1d) { // LCtrl
+                    if (data == 0x1d) {  // LCtrl
                         key_ctrl |= 1;
                     }
                     //if (data == 0x) { // RCtrl
                     //    key_ctrl |= 2;
                     //}
-                    if (data == 0x0f) { // Tab
-                        make_wtitle8(buf_win, sht_win->bxsize, "task_a", key_to);
-                        make_wtitle8(buf_cons, sht_cons->bxsize, "console", !key_to);
-                        cursor_col = key_to ? COL8_000000 : -1;
-                        fifo32_put(&task_cons->fifo, 2 + key_to);
-                        if (!key_to)
-                            putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, COL8_FFFFFF, " ", 1);
-
-                        key_to = 1 - key_to;
-
-                        sheet_refresh(sht_win, 0, 0, sht_win->bxsize, 21);
-                        sheet_refresh(sht_cons, 0, 0, sht_cons->bxsize, 21);
+                    if (data == 0x57) {  // F11
+                        sheet_updown(shtctl->sheets[1], shtctl->top - 1);
                     }
-                    if (data == 0x3a) { // CapsLock
+                    if (data == 0x0f) {  // Tab
+                        cursor_col = keywin_off(key_win, sht_win, cursor_col, cursor_line);
+                        int i = key_win->height - 1;
+                        if (!i) i = shtctl->top - 1;
+                        key_win = shtctl->sheets[i];
+                        cursor_col = keywin_on(key_win, sht_win, cursor_col);
+                        // make_wtitle8(buf_win, sht_win->bxsize, "task_a", key_to);
+                        // make_wtitle8(buf_cons, sht_cons->bxsize, "console", !key_to);
+                        // cursor_col = key_to ? COL8_000000 : -1;
+                        // fifo32_put(&task_cons->fifo, 2 + key_to);
+                        // if (!key_to)
+                        //     putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, COL8_FFFFFF, " ", 1);
+
+                        // key_to = 1 - key_to;
+
+                        // sheet_refresh(sht_win, 0, 0, sht_win->bxsize, 21);
+                        // sheet_refresh(sht_cons, 0, 0, sht_cons->bxsize, 21);
+                    }
+                    if (data == 0x3a) {  // CapsLock
                         key_leds ^= 4;
                         fifo32_put(&keycmd, KEYCMD_LED);
                         fifo32_put(&keycmd, key_leds);
                     }
-                    if (data == 0x45) { // NumLock
+                    if (data == 0x45) {  // NumLock
                         key_leds ^= 2;
                         fifo32_put(&keycmd, KEYCMD_LED);
                         fifo32_put(&keycmd, key_leds);
                     }
-                    if (data == 0x46) { // ScrollLock
+                    if (data == 0x46) {  // ScrollLock
                         key_leds ^= 1;
                         fifo32_put(&keycmd, KEYCMD_LED);
                         fifo32_put(&keycmd, key_leds);
@@ -329,7 +363,7 @@ void HariMain(void) {
                         key_ctrl &= ~1;
                     }
                 }
-            } else if (data & MOUSESIG_BIT) { // MOUSE
+            } else if (data & MOUSESIG_BIT) {  // MOUSE
                 data &= ~MOUSESIG_BIT;
                 if (mouse_decode(&mdec, data)) {
                     sprintf(buf, "[lcr]{cns}");
@@ -352,29 +386,66 @@ void HariMain(void) {
                         sheet_slide(sht_mouse, mx, my);
                     }
 
+                    // left button
                     if (mdec.btn & 0x01) {
-                        sheet_updown(sht_win, 3);
-                        sheet_slide(sht_win, mx - 80, my - 8);
+                        if (mmx < 0) {
+                            for (int i = shtctl->top - 1; i > 0; --i) {
+                                sht = shtctl->sheets[i];
+                                int x = mx - sht->vx0;
+                                int y = my - sht->vy0;
+                                if (x == clamp(x, 0, sht->bxsize - 1) && y == clamp(y, 0, sht->bysize - 1)) {
+                                    if (sht->buf[y * sht->bxsize + x] != sht->col_inv) {
+                                        sheet_updown(sht, shtctl->top - 1);
+                                        // title bar
+                                        if (x == clamp(x, 3, sht->bxsize - 4) && y == clamp(y, 3, 20)) mmx = mx, mmy = my;
+                                        // close button
+                                        if(sht->bxsize-x==clamp(sht->bxsize-x,6,21) && y==clamp(y,5,18)){
+                                            cons = (struct CONSOLE*)*((int*)0x0fec);
+                                            cons_putstr0(cons, "User Interrupt (Mouse) Detected.\n");
+                                            if(sht->flags & SHEET_FLAGS_APP){
+                                                cons_putstr0(cons, "The current process will be terminated...\n");
+                                                io_cli();
+                                                task_cons->tss.eax = (int)&(task_cons->tss.esp0);
+                                                task_cons->tss.eip = (int)asm_end_app;
+                                                io_sti();
+                                            }
+                                            else{
+                                                cons_putstr0(cons, "The current process is not an app.\n");
+                                            }
+                                            cons_putstr0(cons, "\n>");
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            x = mx - mmx;
+                            y = my - mmy;
+                            sheet_slide(sht, sht->vx0 + x, sht->vy0 + y);
+                            mmx = mx;
+                            mmy = my;
+                        }
+
                     } else
-                        sheet_updown(sht_win, 1);
+                        mmx = -1;
                 }
             } else {
                 switch (data) {
-                case 0:
-                case 1:
-                    timer_init(timer[0], NULL, !data);
-                    timer_settime(timer[0], timeitv[0]);
-                    if (cursor_col >= 0) {
-                        cursor_col = data ? COL8_000000 : COL8_FFFFFF;
-                        putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, cursor_col, " ", 1);
-                    }
+                    case 0:
+                    case 1:
+                        timer_init(timer[0], NULL, !data);
+                        timer_settime(timer[0], timeitv[0]);
+                        if (cursor_col >= 0) {
+                            cursor_col = data ? COL8_000000 : COL8_FFFFFF;
+                            putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, cursor_col, " ", 1);
+                        }
 
-                    sprintf(buf, "%d / %d", timerctl.next, timerctl.count);
-                    putfonts8_sht(sht_back, 70, binfo->scrny - 45, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
+                        sprintf(buf, "%d / %d", timerctl.next, timerctl.count);
+                        putfonts8_sht(sht_back, 70, binfo->scrny - 45, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
 
-                    break;
-                case 127:
-                    break;
+                        break;
+                    case 127:
+                        break;
                 }
             }
         }

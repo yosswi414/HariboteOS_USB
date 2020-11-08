@@ -495,12 +495,14 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct FILEINFO* finfo;
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
-    char name[18], *p, *q;
+    char name[18], *p, *q, buf[80];
     struct TASK* task = task_now();
     struct SHTCTL* shtctl;
     struct SHEET* sht;
     int segsiz, datsiz, esp, dathrb;
     int i;
+    sprintf(buf, "cmd_app verbose: cmdline: %s\n", cmdline);
+    cons_putstr0(cons, buf);
     for (i = 0; i < 13 && cmdline[i] > ' '; ++i) name[i] = cmdline[i];
     name[i] = '\0';
     strcpy(dbg_str[0], name);
@@ -528,7 +530,9 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
             shtctl = (struct SHTCTL*)*((int*)0x0fe4);
             for (int i = 0; i < MAX_SHEETS; ++i) {
                 sht = &(shtctl->sheets0[i]);
-                if (sht->flags && sht->task == task) sheet_free(sht);
+                if ((sht->flags | SHEET_FLAGS_APP | SHEET_FLAGS_USE) == sht->flags && sht->task == task) {
+                    sheet_free(sht);
+                }
             }
 
             memman_free_4k(memman, (int)q, segsiz);
@@ -578,6 +582,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
         case 5:
             sht = sheet_alloc(shtctl);
             sht->task = task;
+            sht->flags |= SHEET_FLAGS_APP;
             sheet_setbuf(sht, (char*)ebx + cs_base, esi, edi, eax);
             make_window8((char*)ebx + cs_base, esi, edi, (char*)ecx + cs_base, 0);
             sheet_slide(sht, 100, 50);
@@ -637,7 +642,8 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             for (int i; i != 127;) {
                 io_cli();
                 if (!fifo32_status(&task->fifo)) {
-                    if (eax) task_sleep(task);
+                    if (eax)
+                        task_sleep(task);
                     else {
                         io_sti();
                         reg[7] = -1;

@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include "fifo.h"
 #include "graphic.h"
 
 void make_window8(unsigned char* buf, int xsize, int ysize, char* title, char act) {
@@ -61,5 +62,48 @@ void make_wtitle8(unsigned char* buf, int xsize, char* title, char act) {
             buf[(5 + y) * xsize + (xsize - 21 + x)] = c;
         }
     }
+    return;
+}
+
+int keywin_off(struct SHEET* key_win, struct SHEET* sht_win, int cur_c, int cur_x) {
+    change_wtitle8(key_win, FALSE);
+    if (key_win == sht_win) {
+        cur_c = -1;
+        boxfill8(sht_win->buf, sht_win->bxsize, COL8_FFFFFF, 8 * cur_x, 28, 8 * cur_x + 7, 43);
+    } else {
+        if (key_win->flags & SHEET_FLAGS_CURSOR) fifo32_put(&key_win->task->fifo, 3);  // turn cursor off
+    }
+    return cur_c;
+}
+
+int keywin_on(struct SHEET* key_win, struct SHEET* sht_win, int cur_c) {
+    change_wtitle8(key_win, TRUE);
+    if (key_win == sht_win)
+        cur_c = COL8_000000;
+    else {
+        if (key_win->flags & SHEET_FLAGS_CURSOR) fifo32_put(&key_win->task->fifo, 2);  // turn cursor on
+    }
+    return cur_c;
+}
+
+void change_wtitle8(struct SHEET* sht, char act) {
+    int xsize = sht->bxsize;
+    char c, tc[2], tbc[2], *buf = sht->buf;
+    act = !!act;
+    tc[act] = COL8_FFFFFF;
+    tc[!act] = COL8_C6C6C6;
+    tbc[act] = COL8_000084;
+    tbc[!act] = COL8_848484;
+    for (int y = 3; y <= 20; ++y) {
+        for (int x = 3; x <= xsize - 4; ++x) {
+            c = buf[y * xsize + x];
+            if (c == tc[0] && x <= xsize - 22)
+                c = tc[1];
+            else if (c == tbc[0])
+                c = tbc[1];
+            buf[y * xsize + x] = c;
+        }
+    }
+    sheet_refresh(sht, 3, 3, xsize, 21);
     return;
 }

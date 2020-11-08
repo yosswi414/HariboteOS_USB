@@ -19,7 +19,7 @@ struct SHTCTL* shtctl_init(struct MEMMAN* memman, unsigned char* vram, int xsize
     ctl->ysize = ysize;
     ctl->top = -1;
     for (int i = 0; i < MAX_SHEETS; i++) {
-        ctl->sheets0[i].flags = SHEET_VACANT;
+        ctl->sheets0[i].flags = SHEET_FLAGS_VACANT;
         ctl->sheets0[i].ctl = ctl;
     }
     return ctl;
@@ -30,7 +30,7 @@ struct SHEET* sheet_alloc(struct SHTCTL* ctl) {
     for (int i = 0; i < MAX_SHEETS; i++) {
         if (ctl->sheets0[i].flags) continue;
         sht = &ctl->sheets0[i];
-        sht->flags = SHEET_USE;
+        sht->flags = SHEET_FLAGS_USE;
         sht->height = -1;
         sht->task = NULL;
         return sht;

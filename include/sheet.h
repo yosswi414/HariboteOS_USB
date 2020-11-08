@@ -3,8 +3,11 @@
 #include "memory.h"
 #include "mtask.h"
 
-#define SHEET_USE TRUE
-#define SHEET_VACANT FALSE
+
+#define SHEET_FLAGS_CURSOR 0x20
+#define SHEET_FLAGS_APP 0x10
+#define SHEET_FLAGS_USE 1
+#define SHEET_FLAGS_VACANT 0
 #define MAX_SHEETS 256
 
 struct SHEET {
