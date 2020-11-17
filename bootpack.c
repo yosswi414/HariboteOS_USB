@@ -34,11 +34,13 @@
 #include "sheet.h"
 #include "timer.h"
 #include "window.h"
+#include "acpi.h"
 
 void task_b_main(struct SHEET* sht_back);
 
 int dbg_val[4];
 char dbg_str[4][64];
+char isAcpiAvail;
 
 extern struct FIFO8 keyfifo;
 extern struct FIFO8 mousefifo;
@@ -102,7 +104,7 @@ void HariMain(void) {
 
     // sht_back
     sht_back = sheet_alloc(shtctl);
-    *((int*)0x0fe4) = (int)shtctl;
+    *((int*)ADDR_SHTCTL) = (int)shtctl;
     buf_back = (unsigned char*)memman_alloc_4k(memman, binfo->scrnx * binfo->scrny);
     sheet_setbuf(sht_back, buf_back, binfo->scrnx, binfo->scrny, -1);
     init_screen(buf_back, binfo->scrnx, binfo->scrny);
@@ -193,6 +195,9 @@ void HariMain(void) {
         timer_settime(timer[i], timeitv[i]);
     }
 
+    // isAcpiAvail = !initAcpi();
+    isAcpiAvail = 0;
+
     key_win = sht_win;
     sht_cons->task = task_cons;
     sht_cons->flags |= SHEET_FLAGS_CURSOR;
@@ -277,7 +282,7 @@ void HariMain(void) {
                                 goto QUIT_MAIN;
                             }
                             if (key_ctrl && tolower(ch) == 'c') {  // Ctrl + c
-                                cons = (struct CONSOLE*)*((int*)0x0fec);
+                                cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
                                 if (task_cons->tss.ss0) {
                                     cons_putstr0(cons, "User Interrupt Detected.\n");
                                     cons_putstr0(cons, "The current process will be terminated...\n");
@@ -287,7 +292,7 @@ void HariMain(void) {
                                     task_cons->tss.eip = (int)asm_end_app;
                                     io_sti();
                                 }
-                                cons_putchar(cons, '>', TRUE);
+                                cons_putstr0(cons, "\n>");
                             } else
                                 fifo32_put(&task_cons->fifo, ch | KEYSIG_BIT);
                         } else if(key_win == sht_win) {
@@ -400,10 +405,11 @@ void HariMain(void) {
                                         if (x == clamp(x, 3, sht->bxsize - 4) && y == clamp(y, 3, 20)) mmx = mx, mmy = my;
                                         // close button
                                         if(sht->bxsize-x==clamp(sht->bxsize-x,6,21) && y==clamp(y,5,18)){
-                                            cons = (struct CONSOLE*)*((int*)0x0fec);
+                                            cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
                                             cons_putstr0(cons, "User Interrupt (Mouse) Detected.\n");
                                             if(sht->flags & SHEET_FLAGS_APP){
                                                 cons_putstr0(cons, "The current process will be terminated...\n");
+                                                fifo32_put(&task_cons->fifo, 127);  // sends 127 to break for loop immediately
                                                 io_cli();
                                                 task_cons->tss.eax = (int)&(task_cons->tss.esp0);
                                                 task_cons->tss.eip = (int)asm_end_app;
@@ -412,7 +418,6 @@ void HariMain(void) {
                                             else{
                                                 cons_putstr0(cons, "The current process is not an app.\n");
                                             }
-                                            cons_putstr0(cons, "\n>");
                                         }
                                         break;
                                     }

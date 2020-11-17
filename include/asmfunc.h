@@ -48,3 +48,7 @@ void asm_cons_putchar();
 void asm_hrb_api();
 void start_app(int eip, int cs, int esp, int ds, int* tss_esp0);
 void asm_end_app(int eip);
+
+void asm_exit();
+void asm_exit_int();
+int asm_apm_instl_chk();

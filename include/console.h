@@ -3,6 +3,9 @@
 #include "sheet.h"
 #include "timer.h"
 
+#define ADDR_CONSOLE 0x0fec
+#define ADDR_APPMEM 0x0fe8
+
 struct CONSOLE {
     struct SHEET* sht;
     int cur_x, cur_y;
@@ -29,6 +32,10 @@ void cmd_msearch(struct CONSOLE* cons, int addr, char* word);
 void cmd_mvsearch(struct CONSOLE* cons, int addr, uint val);
 void cmd_mwrite(struct CONSOLE* cons, int addr, unsigned char val);
 void cmd_debug(struct CONSOLE* cons);
+
+void cmd_exit(struct CONSOLE* cons, char mode);
+void cmd_test(struct CONSOLE* cons);
+
 int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline);
 
 int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);

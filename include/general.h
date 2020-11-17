@@ -16,3 +16,7 @@
 
 typedef unsigned int uint;
 typedef long unsigned int size_t;
+
+typedef unsigned int dword;
+typedef unsigned short word;
+typedef unsigned char byte;

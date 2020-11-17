@@ -26,3 +26,6 @@ struct GATE_DESCRIPTOR {
 void init_gdtidt(void);
 void set_segmdesc(struct SEGMENT_DESCRIPTOR* sd, unsigned int limit, int base, int ar);
 void set_gatedesc(struct GATE_DESCRIPTOR* gd, int offset, int selector, int ar);
+
+// 
+int ar_cal(unsigned char type, unsigned char p, unsigned char dpl, unsigned char d);

@@ -10,6 +10,8 @@
 #define SHEET_FLAGS_VACANT 0
 #define MAX_SHEETS 256
 
+#define ADDR_SHTCTL 0x0fe4
+
 struct SHEET {
     unsigned char* buf;
     int bxsize, bysize, vx0, vy0, col_inv, height, flags;

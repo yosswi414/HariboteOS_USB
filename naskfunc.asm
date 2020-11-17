@@ -24,6 +24,7 @@
 		GLOBAL	start_app, asm_end_app
 		GLOBAL	asm_inthandler00, asm_inthandler06, asm_inthandler0c, asm_inthandler0d
 		EXTERN	inthandler00, inthandler06, inthandler0c, inthandler0d
+		GLOBAL	asm_exit, asm_apm_instl_chk, asm_exit_int
 
 [SECTION .text]
 
@@ -358,3 +359,13 @@ start_app:		; void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
 		PUSH	ECX				; CS
 		PUSH	EAX				; EIP
 		RETF
+
+asm_exit:
+		MOV		AX, 0x1000
+		MOV		AX, SS
+		MOV		SP, 0xf000
+		MOV		AX, 0x5307
+		MOV		BX, 0x0001
+		MOV		CX, 0x0003
+		INT		0x15
+		RET

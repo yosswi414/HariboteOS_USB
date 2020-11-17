@@ -53,6 +53,7 @@ void init_gdtidt(void) {
     set_gatedesc(idt + 0x2c, (int)asm_inthandler2c, 2 << 3, AR_INTGATE32);
     // 0x30 ~ 0xff : free to use
     set_gatedesc(idt + 0x40, (int)asm_hrb_api, 2 << 3, AR_INTGATE32 + 0x60);
+    set_gatedesc(idt + 0x41, (int)asm_exit, 2 << 3, 0x408e);  // 1000 1 11 0
 
     return;
 }

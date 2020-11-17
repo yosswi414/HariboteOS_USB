@@ -12,6 +12,7 @@ size_t strlen(const char* s);
 char* strcpy(char* restrict s1, const char* restrict s2);
 char* strncpy(char* restrict s1, const char* restrict s2, size_t n);
 void* memcpy(void* restrict s1, const void* restrict s2, size_t n);
+int memcmp(const void* restrict buf1, const void* restrict buf2, size_t n);
 char* strcat(char* restrict s1, const char* restrict s2);
 char* strrev(char* s);
 int strcmp(const char* s1, const char* s2);

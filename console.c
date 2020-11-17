@@ -14,6 +14,7 @@
 
 extern int dbg_val[4];
 extern char dbg_str[4][64];
+extern char isAcpiAvail;
 
 void console_task(struct SHEET* sheet, int memtotal) {
     struct TASK* task = task_now();
@@ -42,7 +43,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
     cons.height = (cons.sht->bysize - cons.off_y - 1) / 16 - 1;
 
     // allow to access cons from assembly
-    *((int*)0x0fec) = (int)&cons;
+    *((int*)ADDR_CONSOLE) = (int)&cons;
 
     cons_putchar(&cons, '>', TRUE);
 
@@ -162,7 +163,10 @@ void cons_putstr1(struct CONSOLE* cons, const char* s, size_t n) {
 
 void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int memtotal) {
     char exit_success = FALSE;
-    char buf[64];
+    char buf[80];
+
+    sprintf(buf, "cmd_app verbose: cmdline: %s\n", cmdline);
+    cons_putstr0(cons, buf);
 
     do {
         if (!cmdline[0]) {
@@ -262,11 +266,22 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int mem
             exit_success = TRUE;
             break;
         }
+        if (!strcmp(cmdline, "exit")) {
+            cmd_exit(cons, isAcpiAvail);
+            exit_success = TRUE;
+            break;
+        }
+        if (!strcmp(cmdline, "test")) {
+            cmd_test(cons);
+            exit_success = TRUE;
+            break;
+        }
         exit_success = !cmd_app(cons, fat, cmdline);
     } while (FALSE);
     if (!exit_success) {
         cons_putstr0(cons, "invalid command.\n");
     }
+    for (int i = 0; i < 80; ++i) buf[i] = '\0';
 }
 
 void cmd_free(struct CONSOLE* cons, unsigned int memtotal) {
@@ -489,20 +504,36 @@ void cmd_debug(struct CONSOLE* cons) {
     cons_newline(cons);
 }
 
+void cmd_exit(struct CONSOLE* cons, char mode) {
+    cons_putstr0(cons, "Exiting...\n");
+    if(!mode) {
+        cons_putstr0(cons, "Using VBox feature...\n");
+        io_out16(0x4004, 0x3400); // this works only in VirtualBox environment
+    }
+    cons_putstr0(cons, "Using ACPI...\n");
+    asm_exit();
+    cons_putstr0(cons, "Failed to exit.\n\n");
+    return;
+}
+
+void cmd_test(struct CONSOLE* cons){
+    cons_putstr0(cons, "wrstr:\n");
+    return;
+}
+
 #define SIZE_APPMEM (64 * 1024)
 
 int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct FILEINFO* finfo;
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
-    char name[18], *p, *q, buf[80];
+    char name[18], *p, *q;
     struct TASK* task = task_now();
     struct SHTCTL* shtctl;
     struct SHEET* sht;
     int segsiz, datsiz, esp, dathrb;
     int i;
-    sprintf(buf, "cmd_app verbose: cmdline: %s\n", cmdline);
-    cons_putstr0(cons, buf);
+
     for (i = 0; i < 13 && cmdline[i] > ' '; ++i) name[i] = cmdline[i];
     name[i] = '\0';
     strcpy(dbg_str[0], name);
@@ -521,13 +552,13 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
             datsiz = *((int*)(p + 0x0010));
             dathrb = *((int*)(p + 0x0014));
             q = (char*)memman_alloc_4k(memman, SIZE_APPMEM);
-            *((int*)0x0fe8) = (int)q;
+            *((int*)ADDR_APPMEM) = (int)q;
             set_segmdesc(gdt + 1003, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
             set_segmdesc(gdt + 1004, segsiz - 1, (int)q, AR_DATA32_RW + 0x60);
             for (int i = 0; i < datsiz; ++i) q[esp + i] = p[dathrb + i];
             start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
 
-            shtctl = (struct SHTCTL*)*((int*)0x0fe4);
+            shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
             for (int i = 0; i < MAX_SHEETS; ++i) {
                 sht = &(shtctl->sheets0[i]);
                 if ((sht->flags | SHEET_FLAGS_APP | SHEET_FLAGS_USE) == sht->flags && sht->task == task) {
@@ -547,10 +578,10 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
 }
 
 int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
-    int cs_base = *((int*)0x0fe8);
+    int cs_base = *((int*)ADDR_APPMEM);
     struct TASK* task = task_now();
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
-    struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)0x0fe4);
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
+    struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
     struct SHEET* sht;
     volatile int* reg = &eax + 1;
     /* reg: the pointer next to EAX
@@ -706,7 +737,7 @@ void hrb_api_linewin(struct SHEET* sht, int x0, int y0, int x1, int y1, int col)
 }
 
 int* inthandler00(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
     char s[32];
     cons_putstr0(cons, "\nINT 0x00 :\nZero Division Exception.\n");
@@ -717,7 +748,7 @@ int* inthandler00(int* esp) {
 }
 
 int* inthandler06(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
     char s[32];
     cons_putstr0(cons, "\nINT 0x06 :\nInvalid Instruction Exception.\n");
@@ -728,7 +759,7 @@ int* inthandler06(int* esp) {
 }
 
 int* inthandler0c(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
     char s[32];
     cons_putstr0(cons, "\nINT 0x0C :\nStack Exception.\n");
@@ -739,7 +770,7 @@ int* inthandler0c(int* esp) {
 }
 
 int* inthandler0d(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)0x0fec);
+    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
     char s[32];
     cons_putstr0(cons, "\nINT 0x0D :\nGeneral Protected Exception.\n");
