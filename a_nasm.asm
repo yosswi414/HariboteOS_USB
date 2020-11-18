@@ -4,6 +4,7 @@
         GLOBAL  api_initmalloc, api_malloc, api_free
         GLOBAL  api_point, api_linewin
         GLOBAL  api_getkey
+        GLOBAL  api_alloctimer, api_inittimer, api_settimer, api_freetimer, api_gettimerflags
 
 [SECTION .text]
 
@@ -79,7 +80,7 @@ api_boxfillwin: ; void api_boxfillwin(int win, int x0, int y0, int x1, int y1, i
         POP     EDI
         RET
 
-api_initmalloc: ; void api_initmalloc(void);
+api_initmalloc: ; void api_initmalloc();
         PUSH    EBX
         MOV     EDX, 8
         MOV     EBX, [CS:0x0020]; address of malloc area
@@ -172,4 +173,35 @@ api_getkey:     ; int api_getkey(int mode);
         MOV     EDX, 15
         MOV     EAX, [ESP+4]    ; mode
         INT     0x40
+        RET
+
+api_alloctimer: ; int api_alloctimer();
+        MOV     EDX, 16
+        INT     0x40
+        RET
+
+api_inittimer:  ; void api_inittimer(int timer, int data);
+        PUSH    EBX
+        MOV     EDX, 17
+        MOV     EBX, [ESP+8]    ; timer
+        MOV     EAX, [ESP+12]    ; data
+        INT     0x40
+        POP     EBX
+        RET
+
+api_settimer:   ; void api_settimer(int timer, int time);
+        PUSH    EBX
+        MOV     EDX, 18
+        MOV     EBX, [ESP+8]    ; timer
+        MOV     EAX, [ESP+12]    ; time
+        INT     0x40
+        POP     EBX
+        RET
+
+api_freetimer:  ; void api_freetimer(int timer);
+        PUSH    EBX
+        MOV     EDX, 19
+        MOV     EBX, [ESP+8]    ; timer
+        INT     0x40
+        POP     EBX
         RET

@@ -2,6 +2,7 @@
 
 #include "fifo.h"
 #include "general.h"
+#include "console.h"
 
 // PIT; Programmable Interval Timer
 
@@ -16,6 +17,7 @@
 #define TIMER_FLAGS_EMPTY 0
 #define TIMER_FLAGS_ALLOC 1
 #define TIMER_FLAGS_USING 2
+#define TIMER_FLAGS_ISAPP 4
 
 struct TIMER {
     struct TIMER* next;
@@ -37,3 +39,6 @@ void timer_free(struct TIMER* timer);
 void timer_init(struct TIMER* timer, struct FIFO32* fifo, int data);
 void timer_settime(struct TIMER* timer, uint timeout);
 void timer_adjust();
+
+int timer_cancel(struct TIMER* timer);
+void timer_cancelall(struct FIFO32* fifo);

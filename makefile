@@ -30,7 +30,7 @@ ACPI = acpi
 SYS = sysfunc
 
 PROG_CHPT = 24
-PROG_PAGE = 505
+PROG_PAGE = 507
 
 OBJS = $(SYS).obj $(ACPI).obj $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
 CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
@@ -79,7 +79,6 @@ $(FNC).obj : $(FNC).asm makefile
 	$(NASM) -f elf -o $@ $(FNC).asm -l $(FNC).lst
 
 font.obj: hankaku.txt makefile
-	pwd
 	z_tools/makefont.exe hankaku.txt font.bin
 	objcopy -I binary -O elf32-i386 -B i386 --redefine-sym _binary_font_bin_start=ascii font.bin $@
 
@@ -116,7 +115,7 @@ FILES = asmhead.asm btp.ld README.md $(INCLUDE)/window.h console.c Sarah_Crowely
 CONTENT = $(CORE) $(FILES)
 
 # APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb
-APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
+APPS = noodle.hrb walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
 REQ = a_nasm.obj mylibgcc.obj
 
 builder.txt :

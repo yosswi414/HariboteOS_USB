@@ -5,6 +5,8 @@
 #include "general.h"
 #include "interrupt.h"
 #include "mtask.h"
+#include "console.h"
+#include "mylibgcc.h"
 
 extern int dbg_val[4];
 struct TIMERCTL timerctl;
@@ -22,7 +24,7 @@ void init_pit(void) {
     for (int i = 0; i < MAX_TIMER; ++i) timerctl.timers0[i].flags = TIMER_FLAGS_EMPTY;
     struct TIMER* t = timer_alloc();
     t->timeout = timerctl.next = 0xffffffff;
-    t->flags = TIMER_FLAGS_USING;
+    t->flags |= TIMER_FLAGS_USING;
     t->next = NULL;
     timerctl.t0 = t;
     timerctl.count = 0;
@@ -41,7 +43,7 @@ void inthandler20(int* esp) {
     if (timerctl.next > timerctl.count) return;
     struct TIMER* timer;
     for (timer = timerctl.t0; timer->timeout <= timerctl.count; timer = timer->next) {
-        timer->flags = TIMER_FLAGS_ALLOC;
+        timer->flags &= ~TIMER_FLAGS_USING;
         if (timer != task_timer)
             fifo32_put(timer->fifo, timer->data);
         else
@@ -56,7 +58,7 @@ void inthandler20(int* esp) {
 struct TIMER* timer_alloc(void) {
     for (int i = 0; i < MAX_TIMER; ++i) {
         if (timerctl.timers0[i].flags == TIMER_FLAGS_EMPTY) {
-            timerctl.timers0[i].flags = TIMER_FLAGS_ALLOC;
+            timerctl.timers0[i].flags |= TIMER_FLAGS_ALLOC;
             return &timerctl.timers0[i];
         }
     }
@@ -76,7 +78,7 @@ void timer_init(struct TIMER* timer, struct FIFO32* fifo, int data) {
 
 void timer_settime(struct TIMER* timer, uint timeout) {
     timer->timeout = timeout + timerctl.count;
-    timer->flags = TIMER_FLAGS_USING;
+    timer->flags |= TIMER_FLAGS_USING;
     int e = io_load_eflags();
     io_cli();
     struct TIMER* t = timerctl.t0;
@@ -109,4 +111,44 @@ void timer_adjust() {
         if (timerctl.timers0[i].timeout != 0xffffffff) timerctl.timers0[i].timeout -= t0;
     }
     io_sti();
+}
+
+int timer_cancel(struct TIMER* timer){
+    struct TIMER* t;
+    int e = io_load_eflags();
+    io_cli();
+    if(timer->flags & TIMER_FLAGS_USING){
+        if(timer==timerctl.t0){
+            // if timer is the head of timerctl
+            t = timer->next;
+            timerctl.t0 = t;
+            timerctl.next = t->timeout;
+        }else{
+            // if not the head
+            // find the one before timer
+            t = timerctl.t0;
+
+            while (t->next != timer) t = t->next;
+            t->next = timer->next; // timer->prev->next == timer->next
+        }
+        timer->flags &= ~TIMER_FLAGS_USING;
+        io_store_eflags(e);
+        return 0;
+    }
+    io_store_eflags(e);
+    return 1; // no process was required
+}
+
+void timer_cancelall(struct FIFO32 *fifo){
+    struct TIMER* t;
+    int e = io_load_eflags();
+    io_cli();
+    for (int i = 0; i < MAX_TIMER; ++i){
+        t = &timerctl.timers0[i];
+        if((t->flags & ~TIMER_FLAGS_ISAPP) && (t->flags & TIMER_FLAGS_ISAPP) && t->fifo == fifo){
+            timer_cancel(t);
+            timer_free(t);
+        }
+    }
+    io_store_eflags(e);
 }

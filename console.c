@@ -42,7 +42,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
     cons.width = (cons.sht->bxsize - cons.off_x - 1) / 8 - 2;
     cons.height = (cons.sht->bysize - cons.off_y - 1) / 16 - 1;
 
-    // allow to access cons from assembly
+    // allow to access cons from anywhere
     *((int*)ADDR_CONSOLE) = (int)&cons;
 
     cons_putchar(&cons, '>', TRUE);
@@ -506,9 +506,9 @@ void cmd_debug(struct CONSOLE* cons) {
 
 void cmd_exit(struct CONSOLE* cons, char mode) {
     cons_putstr0(cons, "Exiting...\n");
-    if(!mode) {
+    if (!mode) {
         cons_putstr0(cons, "Using VBox feature...\n");
-        io_out16(0x4004, 0x3400); // this works only in VirtualBox environment
+        io_out16(0x4004, 0x3400);  // this works only in VirtualBox environment
     }
     cons_putstr0(cons, "Using ACPI...\n");
     asm_exit();
@@ -516,7 +516,7 @@ void cmd_exit(struct CONSOLE* cons, char mode) {
     return;
 }
 
-void cmd_test(struct CONSOLE* cons){
+void cmd_test(struct CONSOLE* cons) {
     cons_putstr0(cons, "wrstr:\n");
     return;
 }
@@ -565,7 +565,7 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
                     sheet_free(sht);
                 }
             }
-
+            timer_cancelall(&task->fifo);
             memman_free_4k(memman, (int)q, segsiz);
         } else {
             cons_putstr0(cons, ".hrb file format error.\n");
@@ -584,6 +584,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
     struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
     struct SHEET* sht;
     volatile int* reg = &eax + 1;
+    char buf[80];
     /* reg: the pointer next to EAX
     * reg[0] : EDI
     * reg[1] : ESI
@@ -698,11 +699,28 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
                         cons->cur_c = -1;
                         break;
                 }
-                if (i & KEYSIG_BIT) {  // keyboard signal
+                if (i >= KEYSIG_BIT) {  // keyboard signal
                     reg[7] = i & ~KEYSIG_BIT;
                     break;
                 }
             }
+            break;
+        case 16:
+            // allocate timer
+            reg[7] = (int)timer_alloc();
+            ((struct TIMER*)reg[7])->flags |= TIMER_FLAGS_ISAPP;
+            break;
+        case 17:
+            // initialize timer
+            timer_init((struct TIMER*)ebx, &task->fifo, eax + KEYSIG_BIT);
+            break;
+        case 18:
+            // set timer
+            timer_settime((struct TIMER*)ebx, eax);
+            break;
+        case 19:
+            // free timer
+            timer_free((struct TIMER*)ebx);
             break;
         default:
             dbg_val[0] = edx;

@@ -19,6 +19,10 @@ bugzero.hrb : bugzero.c $(REQ) app.ld makefile
 	$(CC) $(CFLAGS_SW) -o bugzero.obj -l bugzero.lst bugzero.c
 	ld -Map=bugzero.map -m elf_i386 -T app.ld -o $@ bugzero.obj $(REQ)
 
+noodle.hrb : noodle.c $(REQ) app.ld makefile
+	$(CC) $(CFLAGS_SW) -o noodle.obj -l noodle.lst noodle.c
+	ld -Map=noodle.map -m elf_i386 -T app.ld -o $@ noodle.obj $(REQ)
+
 %.hrb : %.asm app.ld makefile
 	# $*
 	$(NASM) -f elf32 -o $*.obj $*.asm -l $*.lst

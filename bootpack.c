@@ -20,6 +20,7 @@
 #define PROGRESS_MIN -1
 #endif
 
+#include "acpi.h"
 #include "asmfunc.h"
 #include "console.h"
 #include "desctable.h"
@@ -34,7 +35,6 @@
 #include "sheet.h"
 #include "timer.h"
 #include "window.h"
-#include "acpi.h"
 
 void task_b_main(struct SHEET* sht_back);
 
@@ -60,9 +60,11 @@ void HariMain(void) {
     char buf[128];
     int fifobuf[FIFO_SIZ], keycmd_buf[32];
     struct TIMER* timer[1];
-    int x, y;
     int mx, my;
+    int x, y;
     int mmx = -1, mmy = -1;
+    int mhx = -1, mhy = -1;
+    char hold_bar = FALSE;
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct SHTCTL* shtctl;
@@ -223,7 +225,7 @@ void HariMain(void) {
             sprintf(buf, "fifo:[%3d](%4d)", fifo32_status(&fifo), data);
             putfonts8_sht(sht_back, 0, 17, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
             io_sti();
-            if(!key_win->flags){
+            if (!key_win->flags) {
                 key_win = shtctl->sheets[shtctl->top - 1];
                 cursor_col = keywin_on(key_win, sht_win, cursor_col);
             }
@@ -254,7 +256,7 @@ void HariMain(void) {
                     if (data == 0x1c) {  // Enter
                         if (key_win != sht_win)
                             fifo32_put(&task_cons->fifo, KEYSIG_BIT | '\n');
-                        else if(key_win == sht_win){
+                        else if (key_win == sht_win) {
                             if (!ch && cursor_line + 1 < maxline) {
                                 putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, COL8_FFFFFF, " ", 1);
                                 cursor_line++;
@@ -264,7 +266,7 @@ void HariMain(void) {
                     if (data == 0x0e) {  // Backspace
                         if (key_win != sht_win)
                             fifo32_put(&task_cons->fifo, KEYSIG_BIT | '\b');
-                        else if(key_win == sht_win){
+                        else if (key_win == sht_win) {
                             if (!ch && (cursor_line > 0 || linech[cursor_line] > 0)) {
                                 putfonts8_sht(sht_win, 10 + linech[cursor_line] * 8, 25 + 32 + cursor_line * 16, COL8_008484, COL8_FFFFFF, " ", 1);
                                 if (linech[cursor_line] > 0) {
@@ -291,11 +293,13 @@ void HariMain(void) {
                                     task_cons->tss.eax = (int)&(task_cons->tss.esp0);
                                     task_cons->tss.eip = (int)asm_end_app;
                                     io_sti();
+                                } else {
+                                    cons_putchar(cons, ' ', FALSE);
+                                    cons_putstr0(cons, "\n>");
                                 }
-                                cons_putstr0(cons, "\n>");
                             } else
                                 fifo32_put(&task_cons->fifo, ch | KEYSIG_BIT);
-                        } else if(key_win == sht_win) {
+                        } else if (key_win == sht_win) {
                             if (cursor_line + 1 < maxline || linech[cursor_line] + 1 < maxchar) {
                                 textbox[cursor_line][linech[cursor_line]++] = ch;
                                 if (linech[cursor_line] + 1 == maxchar && cursor_line + 1 < maxline)
@@ -391,48 +395,64 @@ void HariMain(void) {
                         sheet_slide(sht_mouse, mx, my);
                     }
 
-                    // left button
+                    // left button push
                     if (mdec.btn & 0x01) {
-                        if (mmx < 0) {
+                        if (mhx < 0) {
+                            mhx = mmx = mx, mhy = mmy = my;
                             for (int i = shtctl->top - 1; i > 0; --i) {
                                 sht = shtctl->sheets[i];
-                                int x = mx - sht->vx0;
-                                int y = my - sht->vy0;
+                                x = mx - sht->vx0;
+                                y = my - sht->vy0;
                                 if (x == clamp(x, 0, sht->bxsize - 1) && y == clamp(y, 0, sht->bysize - 1)) {
                                     if (sht->buf[y * sht->bxsize + x] != sht->col_inv) {
                                         sheet_updown(sht, shtctl->top - 1);
-                                        // title bar
-                                        if (x == clamp(x, 3, sht->bxsize - 4) && y == clamp(y, 3, 20)) mmx = mx, mmy = my;
-                                        // close button
-                                        if(sht->bxsize-x==clamp(sht->bxsize-x,6,21) && y==clamp(y,5,18)){
-                                            cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
-                                            cons_putstr0(cons, "User Interrupt (Mouse) Detected.\n");
-                                            if(sht->flags & SHEET_FLAGS_APP){
-                                                cons_putstr0(cons, "The current process will be terminated...\n");
-                                                fifo32_put(&task_cons->fifo, 127);  // sends 127 to break for loop immediately
-                                                io_cli();
-                                                task_cons->tss.eax = (int)&(task_cons->tss.esp0);
-                                                task_cons->tss.eip = (int)asm_end_app;
-                                                io_sti();
-                                            }
-                                            else{
-                                                cons_putstr0(cons, "The current process is not an app.\n");
-                                            }
+                                        if (sht != key_win) {
+                                            cursor_col = keywin_off(key_win, sht_win, cursor_col, cursor_line);
+                                            key_win = sht;
+                                            cursor_col = keywin_on(key_win, sht_win, cursor_col);
                                         }
+                                        if (sht->bxsize - x == clamp(sht->bxsize - x, 6, 21) && y == clamp(y, 5, 18))  // if close button
+                                            hold_bar = FALSE;
+                                        else if (x == clamp(x, 3, sht->bxsize - 4) && y == clamp(y, 3, 20))  // if title bar
+                                            hold_bar = TRUE;
                                         break;
                                     }
                                 }
                             }
                         } else {
-                            x = mx - mmx;
-                            y = my - mmy;
-                            sheet_slide(sht, sht->vx0 + x, sht->vy0 + y);
+                            if (hold_bar) {
+                                int dx = mx - mmx;
+                                int dy = my - mmy;
+                                sheet_slide(sht, sht->vx0 + dx, sht->vy0 + dy);
+                            }
                             mmx = mx;
                             mmy = my;
                         }
 
-                    } else
-                        mmx = -1;
+                    } else {
+                        // left button release
+                        if (mhx >= 0) {
+                            // close button
+                            x = mx - sht->vx0;
+                            y = my - sht->vy0;
+                            if (sht->bxsize - x == clamp(sht->bxsize - x, 6, 21) && y == clamp(y, 5, 18)) {
+                                cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
+                                cons_putstr0(cons, "User Interrupt (Mouse) Detected.\n");
+                                if (sht->flags & SHEET_FLAGS_APP) {
+                                    cons_putstr0(cons, "The current process will be terminated...\n");
+                                    fifo32_put(&task_cons->fifo, 127);  // sends 127 to break for loop immediately
+                                    io_cli();
+                                    task_cons->tss.eax = (int)&(task_cons->tss.esp0);
+                                    task_cons->tss.eip = (int)asm_end_app;
+                                    io_sti();
+                                } else {
+                                    cons_putstr0(cons, "The current process is not an app.\n");
+                                }
+                            }
+                            mmx = mhx = -1, hold_bar = FALSE;
+                            sht = NULL;
+                        }
+                    }
                 }
             } else {
                 switch (data) {
@@ -450,6 +470,7 @@ void HariMain(void) {
 
                         break;
                     case 127:
+                        cons_putstr0(cons, "SIGNAL 127\n");
                         break;
                 }
             }
