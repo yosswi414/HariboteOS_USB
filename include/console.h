@@ -3,9 +3,6 @@
 #include "sheet.h"
 #include "timer.h"
 
-#define ADDR_CONSOLE 0x0fec
-#define ADDR_APPMEM 0x0fe8
-
 struct CONSOLE {
     struct SHEET* sht;
     int cur_x, cur_y;

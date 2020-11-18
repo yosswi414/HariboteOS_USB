@@ -14,6 +14,8 @@ word SLP_EN;
 word SCI_EN;
 byte PM1_CNT_LEN;
 
+char buf[80];
+
 // check if the given address has a valid header
 unsigned int *acpiCheckRSDPtr(unsigned int *ptr) {
     char *sig = "RSD PTR ";
@@ -95,18 +97,25 @@ int acpiEnable(void) {
             outb((unsigned int)SMI_CMD, ACPI_ENABLE);  // send acpi enable command
             // give 3 seconds time to enable acpi
             int i;
-            for (i = 0; i < 300; i++) {
-                if ((inw((unsigned int)PM1a_CNT) & SCI_EN) == 1)
+            for (i = 0; i < 5; i++) {
+                int inw_pm1a_cnt = inw((unsigned int)PM1a_CNT);
+                if ((inw_pm1a_cnt & SCI_EN) == 1)
                     break;
-                sleep(10);
+                //sleep(10);
+                sprintf(buf, "attempting PM1a_CNT(0x%x (%d))...\n", PM1a_CNT, inw_pm1a_cnt);
+                wrstr(buf);
             }
             if (PM1b_CNT != 0)
-                for (; i < 300; i++) {
-                    if ((inw((unsigned int)PM1b_CNT) & SCI_EN) == 1)
+                for (; i < 5; i++) {
+                    int inw_pm1b_cnt = inw((unsigned int)PM1b_CNT);
+                    if ((inw_pm1b_cnt & SCI_EN) == 1)
                         break;
-                    sleep(10);
+                    //sleep(10);
+
+                    sprintf(buf, "attempting PM1b_CNT(0x%x (%d))...\n", PM1b_CNT, inw_pm1b_cnt);
+                    wrstr(buf);
                 }
-            if (i < 300) {
+            if (i < 5) {
                 wrstr("enabled acpi.\n");
                 return 0;
             } else {
@@ -118,7 +127,7 @@ int acpiEnable(void) {
             return -1;
         }
     } else {
-        //wrstr("acpi was already enabled.\n");
+        wrstr("acpi was already enabled.\n");
         return 0;
     }
 }
@@ -194,6 +203,7 @@ int initAcpi(void) {
                             SLP_EN = 1 << 13;
                             SCI_EN = 1;
 
+                            wrstr("initAcpi() finished.\n");
                             return 0;
                         } else {
                             wrstr("\\_S5 parse error.\n");

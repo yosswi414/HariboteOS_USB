@@ -11,6 +11,8 @@
 #include "sheet.h"
 #include "timer.h"
 #include "window.h"
+#include "acpi.h"
+#include "sysfunc.h"
 
 extern int dbg_val[4];
 extern char dbg_str[4][64];
@@ -23,9 +25,6 @@ void console_task(struct SHEET* sheet, int memtotal) {
     struct FILEINFO* finfo = (struct FILEINFO*)(ADDR_DISKIMG + 0x002600);
     int* fat = (int*)memman_alloc_4k(memman, 4 * 2880);
     struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
-
-    int fifobuf[128];
-    fifo32_init(&task->fifo, sizeof(fifobuf) / sizeof(int), fifobuf, task);
 
     file_readfat(fat, (unsigned char*)(ADDR_DISKIMG + 0x000200));
 
@@ -43,7 +42,8 @@ void console_task(struct SHEET* sheet, int memtotal) {
     cons.height = (cons.sht->bysize - cons.off_y - 1) / 16 - 1;
 
     // allow to access cons from anywhere
-    *((int*)ADDR_CONSOLE) = (int)&cons;
+    //*((int*)ADDR_CONSOLE) = (int)&cons;
+    task->cons = &cons;
 
     cons_putchar(&cons, '>', TRUE);
 
@@ -507,17 +507,48 @@ void cmd_debug(struct CONSOLE* cons) {
 void cmd_exit(struct CONSOLE* cons, char mode) {
     cons_putstr0(cons, "Exiting...\n");
     if (!mode) {
-        cons_putstr0(cons, "Using VBox feature...\n");
+        wrstr("ACPI is not available.\n");
+        wrstr("Using VBox feature... ");
         io_out16(0x4004, 0x3400);  // this works only in VirtualBox environment
+        wrstr("Failed.\n");
+        wrstr("Using Bochs feature... ");
+        io_out16(0xb004, 0x2000);  // this works only in Bochs and old QEMU environment
+        wrstr("Failed.\n");
+        wrstr("Using QEMU feature... ");
+        io_out16(0x0604, 0x2000);  // this works only in QEMU environment
+        wrstr("Failed.\n");
+        wrstr("Shutdown sequence aborted.\n");
+    } else {
+        cons_putstr0(cons, "Using ACPI...\n");
+        acpiPowerOff();
+        //asm_exit();
     }
-    cons_putstr0(cons, "Using ACPI...\n");
-    asm_exit();
     cons_putstr0(cons, "Failed to exit.\n\n");
     return;
 }
 
+extern dword* SMI_CMD;
+extern byte ACPI_ENABLE;
+extern byte ACPI_DISABLE;
+extern dword* PM1a_CNT;
+extern dword* PM1b_CNT;
+extern word SLP_TYPa;
+extern word SLP_TYPb;
+extern word SLP_EN;
+extern word SCI_EN;
+extern byte PM1_CNT_LEN;
+
 void cmd_test(struct CONSOLE* cons) {
-    cons_putstr0(cons, "wrstr:\n");
+    char buf[80];
+    sprintf(buf, "sizeof(struct RSDPtr): %d\n", sizeof(struct RSDPtr));
+    wrstr(buf);
+    uint* ptr = acpiCheckRSDPtr((uint*)0xe0000);
+    sprintf(buf, "acpiCheckRSDPtr(0xe0000): %x\n", ptr);
+    wrstr(buf);
+    sprintf(buf, "SLP_TYPa: %x\n", SLP_TYPa);
+    wrstr(buf);
+    sprintf(buf, "SLP_TYPb: %x\n", SLP_TYPb);
+    wrstr(buf);
     return;
 }
 
@@ -552,11 +583,11 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
             datsiz = *((int*)(p + 0x0010));
             dathrb = *((int*)(p + 0x0014));
             q = (char*)memman_alloc_4k(memman, SIZE_APPMEM);
-            *((int*)ADDR_APPMEM) = (int)q;
-            set_segmdesc(gdt + 1003, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
-            set_segmdesc(gdt + 1004, segsiz - 1, (int)q, AR_DATA32_RW + 0x60);
+            task->ds_base = (int)q;
+            set_segmdesc(gdt + task->sel / 8 + 1000, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
+            set_segmdesc(gdt + task->sel / 8 + 2000, segsiz - 1, (int)q, AR_DATA32_RW + 0x60);
             for (int i = 0; i < datsiz; ++i) q[esp + i] = p[dathrb + i];
-            start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+            start_app(0x1b, task->sel + 1000 * 8, esp, task->sel + 2000 * 8, &(task->tss.esp0));
 
             shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
             for (int i = 0; i < MAX_SHEETS; ++i) {
@@ -578,9 +609,9 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
 }
 
 int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
-    int cs_base = *((int*)ADDR_APPMEM);
     struct TASK* task = task_now();
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
+    int ds_base = task->ds_base;
+    struct CONSOLE* cons = task->cons;
     struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
     struct SHEET* sht;
     volatile int* reg = &eax + 1;
@@ -604,10 +635,10 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             cons_putchar(cons, eax & 0xff, TRUE);
             break;
         case 2:
-            cons_putstr0(cons, (char*)ebx + cs_base);
+            cons_putstr0(cons, (char*)ebx + ds_base);
             break;
         case 3:
-            cons_putstr1(cons, (char*)ebx + cs_base, ecx);
+            cons_putstr1(cons, (char*)ebx + ds_base, ecx);
             break;
         case 4:
             return &(task->tss.esp0);
@@ -615,15 +646,15 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             sht = sheet_alloc(shtctl);
             sht->task = task;
             sht->flags |= SHEET_FLAGS_APP;
-            sheet_setbuf(sht, (char*)ebx + cs_base, esi, edi, eax);
-            make_window8((char*)ebx + cs_base, esi, edi, (char*)ecx + cs_base, 0);
-            sheet_slide(sht, 100, 50);
-            sheet_updown(sht, 3);  // on task_a
+            sheet_setbuf(sht, (char*)ebx + ds_base, esi, edi, eax);
+            make_window8((char*)ebx + ds_base, esi, edi, (char*)ecx + ds_base, 0);
+            sheet_slide(sht, (shtctl->xsize - esi) / 2, (shtctl->ysize - edi) / 2);
+            sheet_updown(sht, shtctl->top);  // on task_a
             reg[7] = (int)sht;     // removed when -O2
             break;
         case 6:
             sht = (struct SHEET*)(ebx & 0xfffffffe);
-            putfonts8(sht->buf, sht->bxsize, esi, edi, eax, (char*)ebp + cs_base);
+            putfonts8(sht->buf, sht->bxsize, esi, edi, eax, (char*)ebp + ds_base);
             if (~ebx & 1) sheet_refresh(sht, esi, edi, esi + ecx * 8, edi + 16);
             break;
         case 7:
@@ -634,19 +665,19 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             break;
         case 8:
             // memman init
-            memman_init((struct MEMMAN*)(ebx + cs_base));
+            memman_init((struct MEMMAN*)(ebx + ds_base));
             ecx &= 0xfffffff0;
-            memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
+            memman_free((struct MEMMAN*)(ebx + ds_base), eax, ecx);
             break;
         case 9:
             // malloc
             ecx = (ecx + 0x0f) & 0xfffffff0;
-            reg[7] = memman_alloc((struct MEMMAN*)(ebx + cs_base), ecx);
+            reg[7] = memman_alloc((struct MEMMAN*)(ebx + ds_base), ecx);
             break;
         case 10:
             // free
             ecx = (ecx + 0x0f) & 0xfffffff0;
-            memman_free((struct MEMMAN*)(ebx + cs_base), eax, ecx);
+            memman_free((struct MEMMAN*)(ebx + ds_base), eax, ecx);
             break;
         case 11:
             // draw a dot
@@ -722,6 +753,28 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             // free timer
             timer_free((struct TIMER*)ebx);
             break;
+        case 20:
+            // beep
+            if (!eax) {
+                // turn off beep
+                int i = io_in8(0x61);
+                io_out8(0x61, i & 0x0d);
+                sprintf(buf, "beep off(%d)\n", eax);
+                wrstr(buf);
+            } else {
+                int i = 1193180000 / eax;
+                io_out8(0x43, 0xb6);
+                io_out8(0x42, i & 0xff);
+                io_out8(0x42, i >> 8);
+
+                sprintf(buf, "beep on(%d)(%d mHz?)\n", eax, i);
+                wrstr(buf);
+
+                // turn on beep
+                i = io_in8(0x61);
+                io_out8(0x61, (i | 0x03) & 0x0f);
+            }
+            break;
         default:
             dbg_val[0] = edx;
             sprintf(dbg_str[0], "\nUNKNOWN EDX CODE DETECTED.\n");
@@ -755,8 +808,8 @@ void hrb_api_linewin(struct SHEET* sht, int x0, int y0, int x1, int y1, int col)
 }
 
 int* inthandler00(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
+    struct CONSOLE* cons = task->cons;
     char s[32];
     cons_putstr0(cons, "\nINT 0x00 :\nZero Division Exception.\n");
     sprintf(s, "EIP = 0x%08X\n", esp[11]);
@@ -766,8 +819,8 @@ int* inthandler00(int* esp) {
 }
 
 int* inthandler06(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
+    struct CONSOLE* cons = task->cons;
     char s[32];
     cons_putstr0(cons, "\nINT 0x06 :\nInvalid Instruction Exception.\n");
     sprintf(s, "EIP = 0x%08X\n", esp[11]);
@@ -777,8 +830,8 @@ int* inthandler06(int* esp) {
 }
 
 int* inthandler0c(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
+    struct CONSOLE* cons = task->cons;
     char s[32];
     cons_putstr0(cons, "\nINT 0x0C :\nStack Exception.\n");
     sprintf(s, "EIP = 0x%08X\n", esp[11]);
@@ -788,8 +841,8 @@ int* inthandler0c(int* esp) {
 }
 
 int* inthandler0d(int* esp) {
-    struct CONSOLE* cons = (struct CONSOLE*)*((int*)ADDR_CONSOLE);
     struct TASK* task = task_now();
+    struct CONSOLE* cons = task->cons;
     char s[32];
     cons_putstr0(cons, "\nINT 0x0D :\nGeneral Protected Exception.\n");
     sprintf(s, "EIP = 0x%08X\n", esp[11]);

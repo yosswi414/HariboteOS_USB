@@ -65,25 +65,14 @@ void make_wtitle8(unsigned char* buf, int xsize, char* title, char act) {
     return;
 }
 
-int keywin_off(struct SHEET* key_win, struct SHEET* sht_win, int cur_c, int cur_x) {
+void keywin_off(struct SHEET* key_win) {
     change_wtitle8(key_win, FALSE);
-    if (key_win == sht_win) {
-        cur_c = -1;
-        boxfill8(sht_win->buf, sht_win->bxsize, COL8_FFFFFF, 8 * cur_x, 28, 8 * cur_x + 7, 43);
-    } else {
-        if (key_win->flags & SHEET_FLAGS_CURSOR) fifo32_put(&key_win->task->fifo, 3);  // turn cursor off
-    }
-    return cur_c;
+    if (key_win->flags & SHEET_FLAGS_CURSOR) fifo32_put(&key_win->task->fifo, 3);  // turn cursor off
 }
 
-int keywin_on(struct SHEET* key_win, struct SHEET* sht_win, int cur_c) {
+void keywin_on(struct SHEET* key_win) {
     change_wtitle8(key_win, TRUE);
-    if (key_win == sht_win)
-        cur_c = COL8_000000;
-    else {
-        if (key_win->flags & SHEET_FLAGS_CURSOR) fifo32_put(&key_win->task->fifo, 2);  // turn cursor on
-    }
-    return cur_c;
+    if (key_win->flags & SHEET_FLAGS_CURSOR) fifo32_put(&key_win->task->fifo, 2);  // turn cursor on
 }
 
 void change_wtitle8(struct SHEET* sht, char act) {
