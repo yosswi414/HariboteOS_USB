@@ -29,8 +29,8 @@ FIL = file
 ACPI = acpi
 SYS = sysfunc
 
-PROG_CHPT = 24
-PROG_PAGE = 507
+PROG_CHPT = 26
+PROG_PAGE = 545
 
 OBJS = $(SYS).obj $(ACPI).obj $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
 CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c

@@ -1,5 +1,6 @@
 #include "console.h"
 
+#include "acpi.h"
 #include "asmfunc.h"
 #include "desctable.h"
 #include "device.h"
@@ -9,10 +10,9 @@
 #include "mtask.h"
 #include "mylibgcc.h"
 #include "sheet.h"
+#include "sysfunc.h"
 #include "timer.h"
 #include "window.h"
-#include "acpi.h"
-#include "sysfunc.h"
 
 extern int dbg_val[4];
 extern char dbg_str[4][64];
@@ -648,9 +648,9 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             sht->flags |= SHEET_FLAGS_APP;
             sheet_setbuf(sht, (char*)ebx + ds_base, esi, edi, eax);
             make_window8((char*)ebx + ds_base, esi, edi, (char*)ecx + ds_base, 0);
-            sheet_slide(sht, (shtctl->xsize - esi) / 2, (shtctl->ysize - edi) / 2);
+            sheet_slide(sht, ((shtctl->xsize - esi) / 2) & ~3, (shtctl->ysize - edi) / 2);
             sheet_updown(sht, shtctl->top);  // on task_a
-            reg[7] = (int)sht;     // removed when -O2
+            reg[7] = (int)sht;               // removed when -O2
             break;
         case 6:
             sht = (struct SHEET*)(ebx & 0xfffffffe);
@@ -849,4 +849,37 @@ int* inthandler0d(int* esp) {
     cons_putstr0(cons, s);
     cons_putstr0(cons, "\nThe current process will be terminated.\n");
     return &(task->tss.esp0);
+}
+
+#define PADDING_LEFT    8
+#define PADDING_RIGHT   16
+#define PADDING_ABOVE   28
+#define PADDING_DOWN    37
+
+struct SHEET* open_console(struct SHTCTL* shtctl, uint memtotal) {
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+    struct SHEET* sht = sheet_alloc(shtctl);
+    uint wsize_x = 256, wsize_y = 165, size_fifo = 128;
+    unsigned char* buf = (unsigned char*)memman_alloc_4k(memman, wsize_x * wsize_y);
+    struct TASK* task = task_alloc();
+    int* cons_fifo = (int*)memman_alloc_4k(memman, size_fifo * sizeof(int));
+    sheet_setbuf(sht, buf, wsize_x, wsize_y, -1);  // no transparent color
+    make_window8(buf, wsize_x, wsize_y, "console", FALSE);
+    make_textbox8(sht, PADDING_LEFT, PADDING_ABOVE, wsize_x - PADDING_RIGHT, wsize_y - PADDING_DOWN, COL8_000000);
+    task->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 12;
+    task->tss.eip = (int)&console_task;
+    task->tss.es = 1 * 8;
+    task->tss.cs = 2 * 8;
+    task->tss.ss = 1 * 8;
+    task->tss.ds = 1 * 8;
+    task->tss.fs = 1 * 8;
+    task->tss.gs = 1 * 8;
+    // task->tss.eip arguments
+    *((int*)(task->tss.esp + 4)) = (int)sht; // 1st arg
+    *((int*)(task->tss.esp + 8)) = memtotal; // 2nd arg
+    task_run(task, 2, 2);
+    sht->task = task;
+    sht->flags |= SHEET_FLAGS_CURSOR;
+    fifo32_init(&task->fifo, size_fifo, cons_fifo, task);
+    return sht;
 }

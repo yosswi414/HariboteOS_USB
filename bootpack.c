@@ -70,6 +70,9 @@ void HariMain(void) {
     int x, y;
     int mmx = -1, mmy = -1;
     int mhx = -1, mhy = -1;
+    int mmx2 = 0;
+    int new_mx = -1, new_my = 0;
+    int new_wx = 0x7fffffff, new_wy = 0;
     char hold_bar = FALSE;
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
@@ -149,39 +152,19 @@ void HariMain(void) {
     // sht_cons
     int cons_height = 480;
     int cons_width = 640;
-    for (int i = 0; i < CONS_NUM; ++i) {
-        sht_cons[i] = sheet_alloc(shtctl);
-        buf_cons[i] = (unsigned char*)memman_alloc_4k(memman, cons_width * cons_height);
-        sheet_setbuf(sht_cons[i], buf_cons[i], cons_width, cons_height, -1);
-        sprintf(buf, "console %d", i);
-        make_window8(buf_cons[i], cons_width, cons_height, buf, 0);
-        make_textbox8(sht_cons[i], 8, 28, cons_width - 16, cons_height - 37, COL8_000000);
-        task_cons[i] = task_alloc();
-        task_cons[i]->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 12;
-        task_cons[i]->tss.eip = (int)&console_task;
-        task_cons[i]->tss.es = 1 * 8;
-        task_cons[i]->tss.cs = 2 * 8;
-        task_cons[i]->tss.ss = task_cons[i]->tss.ds = task_cons[i]->tss.fs = task_cons[i]->tss.gs = 1 * 8;
-        *((int*)(task_cons[i]->tss.esp + 4)) = (int)sht_cons[i];
-        *((int*)(task_cons[i]->tss.esp + 8)) = memtotal;
-        task_run(task_cons[i], 2, 2);  // level = priority = 2
 
-        sht_cons[i]->task = task_cons[i];
-        sht_cons[i]->flags |= SHEET_FLAGS_CURSOR;
-
-        cons_fifo[i] = (int*)memman_alloc_4k(memman, 128 * 4);
-        fifo32_init(&task_cons[i]->fifo, 128, cons_fifo[i], task_cons[i]);
-    }
+    sht_cons[0] = open_console(shtctl, memtotal);
+    sht_cons[1] = NULL;
 
     sheet_slide(sht_back, 0, 0);
-    sheet_slide(sht_cons[0], 356, 6);
-    sheet_slide(sht_cons[1], 308, 2);
+    sheet_slide(sht_cons[0], 32, 4);
+    //sheet_slide(sht_cons[1], 300, 4);
     sheet_slide(sht_mouse, mx, my);
 
     sheet_updown(sht_back, 0);
     sheet_updown(sht_cons[0], 1);
-    sheet_updown(sht_cons[1], 2);
-    sheet_updown(sht_mouse, 3);
+    //sheet_updown(sht_cons[1], 2);
+    sheet_updown(sht_mouse, 2);
 
     key_win = sht_cons[0];
     keywin_on(key_win);
@@ -223,12 +206,40 @@ void HariMain(void) {
             // hasAcpiTried = 2;
         }
         if (!fifo32_status(&fifo)) {
-            task_sleep(task_a);
-            io_sti();
+            // empty fifo
+            if(new_mx >= 0){
+                io_sti();
+                if(hold_bar)sheet_slide(sht_mouse, new_mx, new_my);
+                new_mx = -1;
+            }
+            else if( new_wx!=0x7fffffff){
+                if (hold_bar)sheet_slide(sht, new_wx, new_wy);
+                new_wx = 0x7fffffff;
+            }
+            else {
+                task_sleep(task_a);
+                io_sti();
+            }
         } else {
             int data = fifo32_get(&fifo);
             sprintf(buf, "fifo:[%3d](%4d)", fifo32_status(&fifo), data);
             putfonts8_sht(sht_back, 0, 17, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
+#define disp_var(var, spc, y) { sprintf(buf, #var":"spc"%10d", var); \
+            putfonts8_sht(sht_back, 0, 300+y*18, COL8_FFFFFF, COL8_008484, buf, strlen(buf)); }
+            disp_var(x, "       ", 0);
+            disp_var(y, "       ", 1);
+            disp_var(mx, "      ", 2);
+            disp_var(my, "      ", 3);
+            disp_var(mmx, "     ", 4);
+            disp_var(mmy, "     ", 5);
+            disp_var(mmx2, "    ", 6);
+            disp_var(mhx, "     ", 7);
+            disp_var(mhy, "     ", 8);
+            disp_var(new_mx, "  ", 9);
+            disp_var(new_my, "  ", 10);
+            disp_var(new_wx, "  ", 11);
+            disp_var(new_wy, "  ", 12);
+            disp_var(hold_bar, "", 13);
             io_sti();
             if (!key_win->flags) {
                 key_win = shtctl->sheets[shtctl->top - 1];
@@ -269,7 +280,7 @@ void HariMain(void) {
                             cons_putstr0(task->cons, "Ctrl + Shift + Q\n");
                             goto QUIT_MAIN;
                         }
-                        if (key_ctrl && tolower(ch) == 'c') {  // Ctrl + c
+                        else if (key_ctrl && tolower(ch) == 'c') {  // Ctrl + c
                             if (task && task->tss.ss0) {
                                 cons_putstr0(task->cons, "User Interrupt Detected.\n");
                                 cons_putstr0(task->cons, "The current process will be terminated...\n");
@@ -281,6 +292,14 @@ void HariMain(void) {
                             } else {
                                 cons_putchar(task->cons, ' ', FALSE);
                                 cons_putstr0(task->cons, "\n>");
+                            }
+                        } else if (key_ctrl && tolower(ch) == 'n') {  // Ctrl + n
+                            if(!sht_cons[1]){
+                                sht_cons[1] = open_console(shtctl, memtotal);
+                                sheet_slide(sht_cons[1], 32, 4);
+                                sheet_updown(sht_cons[1], shtctl->top);
+                                keywin_off(key_win);
+                                keywin_on(key_win = sht_cons[1]);
                             }
                         } else {
                             fifo32_put(&task->fifo, ch | KEYSIG_BIT);
@@ -357,10 +376,13 @@ void HariMain(void) {
                         sheet_slide(sht_mouse, mx, my);
                     }
 
+                    new_mx = mx;
+                    new_my = my;
+
                     // left button push
                     if (mdec.btn & 0x01) {
                         if (mhx < 0) {
-                            mhx = mmx = mx, mhy = mmy = my;
+                            mhx = mx, mhy = my;
                             for (int i = shtctl->top - 1; i > 0; --i) {
                                 sht = shtctl->sheets[i];
                                 x = mx - sht->vx0;
@@ -375,20 +397,24 @@ void HariMain(void) {
                                         }
                                         if (sht->bxsize - x == clamp(sht->bxsize - x, 6, 21) && y == clamp(y, 5, 18))  // if close button
                                             hold_bar = FALSE;
-                                        else if (x == clamp(x, 3, sht->bxsize - 4) && y == clamp(y, 3, 20))  // if title bar
+                                        else if (x == clamp(x, 3, sht->bxsize - 4) && y == clamp(y, 3, 20)){  // if title bar
                                             hold_bar = TRUE;
+                                            mmx2 = sht->vx0;
+                                            new_wy = sht->vy0;
+                                            mmx = mx;
+                                            mmy = my;
+                                        }
                                         break;
                                     }
                                 }
                             }
                         } else {
-                            if (hold_bar) {
-                                int dx = mx - mmx;
-                                int dy = my - mmy;
-                                sheet_slide(sht, sht->vx0 + dx, sht->vy0 + dy);
-                            }
-                            mmx = mx;
+                            x = mx - mmx;
+                            y = my - mmy;
+                            //mmx = mx;
                             mmy = my;
+                            new_wx = (mmx2 + x + 2) & ~3;
+                            new_wy += y;
                         }
 
                     } else {
@@ -413,6 +439,10 @@ void HariMain(void) {
                             }
                             mmx = mhx = -1, hold_bar = FALSE;
                             sht = NULL;
+                        }
+                        if(new_wx !=0x7fffffff){
+                            if(hold_bar)sheet_slide(sht, new_wx, new_wy);
+                            new_wx = 0x7fffffff;
                         }
                     }
                 }

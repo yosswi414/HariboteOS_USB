@@ -3,6 +3,7 @@
 #include "fifo.h"
 #include "graphic.h"
 
+// act: determines the color of the title bar (TRUE: blue, FALSE: gray)
 void make_window8(unsigned char* buf, int xsize, int ysize, char* title, char act) {
     boxfill8(buf, xsize, COL8_C6C6C6, 0, 0, xsize - 1, 0);
     boxfill8(buf, xsize, COL8_FFFFFF, 1, 1, xsize - 2, 1);

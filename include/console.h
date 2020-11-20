@@ -42,3 +42,5 @@ int* inthandler00(int* esp);
 int* inthandler06(int* esp);
 int* inthandler0c(int* esp);
 int* inthandler0d(int* esp);
+
+struct SHEET* open_console(struct SHTCTL* shtctl, uint memtotal);
