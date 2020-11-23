@@ -81,7 +81,10 @@ void inthandler2c(int* esp);
 #define KEYCMD_SENDTO_MOUSE 0xd4
 #define MOUSECMD_ENABLE 0xf4
 
-#define KEYSIG_BIT 0x100
-#define MOUSESIG_BIT 0x200
+#define MASK_SIGNAL (int)(0x7fffff00)
+#define SIGNAL_KEY (int)(0x100)
+#define SIGNAL_MOUSE (int)(0x200)
+#define SIGNAL_EXIT (int)(0x300)
+#define SIGNAL_EXIT_HEADLESS (int)(0x400)
 
 #define MAX_MOUSEQUE 32

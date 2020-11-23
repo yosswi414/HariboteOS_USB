@@ -21,5 +21,6 @@ void HariMain() {
         api_point(win + 1, x, y, COL8_FFFF00);
     }
     api_refreshwin(win, 6, 26, 144, 94);
+    api_getkey(TRUE);
     api_end();
 }

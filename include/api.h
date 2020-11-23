@@ -13,6 +13,9 @@ void api_point(int win, int x, int y, int col);
 void api_refreshwin(int win, int x0, int y0, int x1, int y1);
 void api_linewin(int win, int x0, int y0, int x1, int y1, int col);
 void api_closewin(int win);
+
+// mode=0: return -1 immediately if no input
+// mode=1: sleep until receiving input
 int api_getkey(int mode);
 
 int api_alloctimer();

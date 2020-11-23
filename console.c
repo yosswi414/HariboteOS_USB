@@ -18,13 +18,21 @@ extern int dbg_val[4];
 extern char dbg_str[4][64];
 extern char isAcpiAvail;
 
+struct CONSOLE* cons_dprintf;
+char str_dprintf[64];
+#define dprintf(...)                       \
+    if (cons_dprintf) {                    \
+        sprintf(str_dprintf, __VA_ARGS__); \
+        cons_putstr0(cons_dprintf, str_dprintf);   \
+    }
+
 void console_task(struct SHEET* sheet, int memtotal) {
     struct TASK* task = task_now();
     char buf[128], cmdline[128];
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
-    struct FILEINFO* finfo = (struct FILEINFO*)(ADDR_DISKIMG + 0x002600);
-    int* fat = (int*)memman_alloc_4k(memman, 4 * 2880);
-    struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT;
+    // struct FILEINFO* finfo = (struct FILEINFO*)(ADDR_DISKIMG + 0x002600); // unused for now
+    int* fat = (int*)memman_alloc_4k(memman, SIZE_FAT * sizeof(int));
+    // struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT; // unused for now
 
     file_readfat(fat, (unsigned char*)(ADDR_DISKIMG + 0x000200));
 
@@ -33,29 +41,43 @@ void console_task(struct SHEET* sheet, int memtotal) {
     cons.cur_c = -1;
     cons.cur_x = 0;
     cons.cur_y = 0;
-    cons.timer = timer_alloc();
-    timer_init(cons.timer, &task->fifo, 1);
-    timer_settime(cons.timer, 50);
+    if (sheet) {
+        cons.timer = timer_alloc();
+        timer_init(cons.timer, &task->fifo, 1);
+        timer_settime(cons.timer, 50);
+    }
     cons.off_x = 8;
     cons.off_y = 28;
     cons.width = (cons.sht->bxsize - cons.off_x - 1) / 8 - 2;
     cons.height = (cons.sht->bysize - cons.off_y - 1) / 16 - 1;
 
+    // usually cons.width depends on the size of console window.
+    // when it comes to console-less mode, it should not be like above.
+    // subtracting 5 itself has no definite reason or purpose.
+    if (!sheet) cons.width = 128 - 5;
+
     // allow to access cons from anywhere
     //*((int*)ADDR_CONSOLE) = (int)&cons;
     task->cons = &cons;
 
+    sprintf(buf, "bsize: (%d, %d)\n", sheet->bxsize, sheet->bysize);
+    cons_putstr0(task->cons, buf);
+
     cons_putchar(&cons, '>', TRUE);
+
+    dprintf("f, s: %x, %x\n", &task->fifo, sheet);
 
     while (TRUE) {
         io_cli();
-        sprintf(buf, "cur:(%d, %d)", cons.cur_x, cons.cur_y);
         if (!fifo32_status(&task->fifo)) {
             task_sleep(task);
             io_sti();
         } else {
             int data = fifo32_get(&task->fifo);
             io_sti();
+            if (!sheet) {
+                dprintf("nc received: [%d](sht:%x)\n", data, sheet);
+            }
             if (data <= 1) {  // timer for cursor
                 timer_init(cons.timer, &task->fifo, 1 - data);
                 if (cons.cur_c >= 0) cons.cur_c = data ? COL8_FFFFFF : COL8_000000;
@@ -68,8 +90,16 @@ void console_task(struct SHEET* sheet, int memtotal) {
                 boxfill8(cons.sht->buf, cons.sht->bxsize, COL8_000000, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, (cons.cur_x + 1) * 8 + cons.off_x - 1, (cons.cur_y + 1) * 16 + cons.off_y - 1);
                 //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, COL8_000000, " ", 1);
             }
-            if (data & KEYSIG_BIT) {
-                data &= ~KEYSIG_BIT;
+            if (data == 4) {
+                cmd_exit(&cons, fat);
+            }
+            if (data == 5) {
+                cmd_shutdown(&cons, isAcpiAvail);
+            }
+            if ((data & MASK_SIGNAL) == SIGNAL_KEY) {
+                
+                data &= ~SIGNAL_KEY;
+                if (!sheet) dprintf("received: %c\n", data);
                 if (data == '\b') {
                     if (cons.cur_x > 1) {
                         cons_putchar(&cons, ' ', FALSE);
@@ -84,10 +114,15 @@ void console_task(struct SHEET* sheet, int memtotal) {
                     //cons.cur_y = cons_newline(cons.cur_y, sheet);
                     cons_newline(&cons);
                     cons_runcmd(cmdline, &cons, fat, memtotal);
+                    if(!sheet){
+                        dprintf("nc command: [%s]\n", cmdline);
+                    }
+                    if (!sheet) cmd_exit(&cons, fat);
                     cons_putchar(&cons, '>', TRUE);
-
                 } else {
+                    if (!sheet) dprintf("* ");
                     if (cons.cur_x + 1 < cons.width) {
+                        if (!sheet) dprintf("$(%d) ", cons.cur_x);
                         //buf[0] = data;
                         //buf[1] = '\0';
                         cmdline[cons.cur_x - 1] = data;
@@ -96,8 +131,24 @@ void console_task(struct SHEET* sheet, int memtotal) {
                         cons_putchar(&cons, data, TRUE);
                     }
                 }
+                if (!sheet) {
+                    dprintf("nc command: [%s]\n", cmdline);
+                }
             }
-            if (cons.cur_c >= 0) putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, cons.cur_c, " ", 1);
+            if (sheet) {
+                if (cons.cur_c >= 0) {
+                    boxfill8(sheet->buf, sheet->bxsize, cons.cur_c,
+                             cons.cur_x * 8 + cons.off_x,
+                             cons.cur_y * 16 + cons.off_y,
+                             (cons.cur_x + 1) * 8 + cons.off_x - 1,
+                             (cons.cur_y + 1) * 16 + cons.off_y - 1);
+                }
+                sheet_refresh(sheet,
+                              cons.cur_x * 8 + cons.off_x,
+                              cons.cur_y * 16 + cons.off_y,
+                              (cons.cur_x + 1) * 8 + cons.off_x,
+                              (cons.cur_y + 1) * 16 + cons.off_y);
+            }
         }
     }
 }
@@ -109,7 +160,7 @@ void cons_putchar(struct CONSOLE* cons, int chr, char move) {
     switch (s[0]) {
         case '\t':
             do {
-                putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, " ", 1);
+                if (cons->sht) putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, " ", 1);
                 cons->cur_x++;
                 if (cons->cur_x >= cons->width) cons_newline(cons);
             } while (cons->cur_x % 4);
@@ -121,7 +172,7 @@ void cons_putchar(struct CONSOLE* cons, int chr, char move) {
             break;
         default:
             if (cons->cur_x >= cons->width) cons_newline(cons);
-            putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, s, strlen(s));
+            if (cons->sht) putfonts8_sht(cons->sht, cons->cur_x * 8 + cons->off_x, cons->cur_y * 16 + cons->off_y, COL8_FFFFFF, COL8_000000, s, strlen(s));
             if (move) {
                 cons->cur_x++;
                 if (cons->cur_x >= cons->width) cons_newline(cons);
@@ -135,17 +186,19 @@ void cons_newline(struct CONSOLE* cons) {
     if (cons->cur_y < cons->height - 1)
         cons->cur_y++;
     else {
-        for (int y = cons->off_y; y < cons->off_y + (cons->height - 1) * 16; ++y) {
-            for (int x = cons->off_x; x < cons->off_x + cons->width * 8; ++x) {
-                cons->sht->buf[x + y * cons->sht->bxsize] = cons->sht->buf[x + (y + 16) * cons->sht->bxsize];
+        if (cons->sht) {
+            for (int y = cons->off_y; y < cons->off_y + (cons->height - 1) * 16; ++y) {
+                for (int x = cons->off_x; x < cons->off_x + cons->width * 8; ++x) {
+                    cons->sht->buf[x + y * cons->sht->bxsize] = cons->sht->buf[x + (y + 16) * cons->sht->bxsize];
+                }
             }
-        }
-        for (int y = cons->off_y + (cons->height - 1) * 16; y < cons->off_y + cons->height * 16; ++y) {
-            for (int x = cons->off_x; x < cons->off_x + cons->width * 8; ++x) {
-                cons->sht->buf[x + y * cons->sht->bxsize] = COL8_000000;
+            for (int y = cons->off_y + (cons->height - 1) * 16; y < cons->off_y + cons->height * 16; ++y) {
+                for (int x = cons->off_x; x < cons->off_x + cons->width * 8; ++x) {
+                    cons->sht->buf[x + y * cons->sht->bxsize] = COL8_000000;
+                }
             }
+            sheet_refresh(cons->sht, cons->off_x, cons->off_y, cons->off_x + cons->width * 8, cons->off_y + cons->height * 16);
         }
-        sheet_refresh(cons->sht, cons->off_x, cons->off_y, cons->off_x + cons->width * 8, cons->off_y + cons->height * 16);
     }
     cons->cur_x = 0;
     return;
@@ -163,7 +216,7 @@ void cons_putstr1(struct CONSOLE* cons, const char* s, size_t n) {
 
 void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int memtotal) {
     char exit_success = FALSE;
-    char buf[80];
+    char buf[80], word[16];
 
     sprintf(buf, "cmd_app verbose: cmdline: %s\n", cmdline);
     cons_putstr0(cons, buf);
@@ -174,17 +227,17 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int mem
             break;
         }
         if (!strcmp(cmdline, "mem") || !strcmp(cmdline, "free")) {
-            cmd_free(cons, memtotal);
+            if (cons->sht) cmd_free(cons, memtotal);
             exit_success = TRUE;
             break;
         }
         if (!strcmp(cmdline, "clear") || !strcmp(cmdline, "cls")) {
-            cmd_clear(cons);
+            if (cons->sht) cmd_clear(cons);
             exit_success = TRUE;
             break;
         }
         if (!strcmp(cmdline, "ls") || !strcmp(cmdline, "dir")) {
-            cmd_ls(cons);
+            if (cons->sht) cmd_ls(cons);
             exit_success = TRUE;
             break;
         }
@@ -211,7 +264,6 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int mem
             while (buf[i] != ' ') ++i;
             buf[i] = '\0';
             if (!strlen(buf)) break;
-            unsigned char word[16];
             strcpy(word, buf);
             for (j = 0; buf[i + j + 1]; ++j) buf[j] = buf[i + j + 1];
             buf[j] = '\0';
@@ -229,7 +281,6 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int mem
             while (buf[i] != ' ') ++i;
             buf[i] = '\0';
             if (!strlen(buf)) break;
-            unsigned char word[16];
             strcpy(word, buf);
             for (j = 0; buf[i + j + 1]; ++j) buf[j] = buf[i + j + 1];
             buf[j] = '\0';
@@ -258,21 +309,49 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int mem
             break;
         }
         if (!strncmp(cmdline, "cat ", 4)) {
-            exit_success = !cmd_cat(cons, fat, cmdline);
+            if (cons->sht)
+                exit_success = !cmd_cat(cons, fat, cmdline);
+            else
+                exit_success = TRUE;
             break;
         }
         if (!strcmp(cmdline, "debug")) {
-            cmd_debug(cons);
+            if (cons->sht) cmd_debug(cons);
+            exit_success = TRUE;
+            break;
+        }
+        if (!strcmp(cmdline, "shutdown")) {
+            cmd_shutdown(cons, isAcpiAvail);
             exit_success = TRUE;
             break;
         }
         if (!strcmp(cmdline, "exit")) {
-            cmd_exit(cons, isAcpiAvail);
+            cmd_exit(cons, fat);
             exit_success = TRUE;
             break;
         }
-        if (!strcmp(cmdline, "test")) {
-            cmd_test(cons);
+        if (!strncmp(cmdline, "testi ", strlen("testi "))) {
+            if (!cmdline[strlen("testi ")]) break;
+            strcpy(buf, cmdline + strlen("testi "));
+            int arg = atoi(buf);
+            cmd_testi(cons, arg);
+            exit_success = TRUE;
+            break;
+        }
+        if (!strncmp(cmdline, "testc ", strlen("testc "))) {
+            if (!cmdline[strlen("testc ")]) break;
+            strcpy(buf, cmdline + strlen("testc "));
+            cmd_testc(cons, buf);
+            exit_success = TRUE;
+            break;
+        }
+        if (!strncmp(cmdline, "start ", strlen("start "))) {
+            cmd_start(cons, cmdline, memtotal);
+            exit_success = TRUE;
+            break;
+        }
+        if (!strncmp(cmdline, "ncst ", strlen("ncst "))) {
+            cmd_ncst(cons, cmdline, memtotal);
             exit_success = TRUE;
             break;
         }
@@ -432,7 +511,7 @@ void cmd_msearch(struct CONSOLE* cons, int addr, char* word) {
     for (; addr < addr_end; ++addr) {
         match = TRUE;
         for (int i = 0; i < len && match; ++i) {
-            if (((unsigned char*)addr)[i] != word[i]) match = FALSE;
+            if (((char*)addr)[i] != word[i]) match = FALSE;
         }
         if (match) break;
     }
@@ -504,8 +583,26 @@ void cmd_debug(struct CONSOLE* cons) {
     cons_newline(cons);
 }
 
-void cmd_exit(struct CONSOLE* cons, char mode) {
-    cons_putstr0(cons, "Exiting...\n");
+extern struct TASKCTL* taskctl;
+
+void cmd_exit(struct CONSOLE* cons, int* fat) {
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+    struct TASK* task = task_now();
+    struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
+    struct FIFO32* fifo = (struct FIFO32*)*((int*)ADDR_FIFO_TASK_A);
+    if (cons->sht) timer_cancel(cons->timer);
+    memman_free_4k(memman, (int)fat, SIZE_FAT * sizeof(int));
+    io_cli();
+    if (cons->sht)
+        fifo32_put(fifo, (cons->sht - shtctl->sheets0) | SIGNAL_EXIT);
+    else
+        fifo32_put(fifo, (task - taskctl->tasks0) | SIGNAL_EXIT_HEADLESS);
+    io_sti();
+    while (TRUE) task_sleep(task);
+}
+
+void cmd_shutdown(struct CONSOLE* cons, char mode) {
+    cons_putstr0(cons, "Shutting down...\n");
     if (!mode) {
         wrstr("ACPI is not available.\n");
         wrstr("Using VBox feature... ");
@@ -523,36 +620,9 @@ void cmd_exit(struct CONSOLE* cons, char mode) {
         acpiPowerOff();
         //asm_exit();
     }
-    cons_putstr0(cons, "Failed to exit.\n\n");
+    cons_putstr0(cons, "Failed to shutdown.\n\n");
     return;
 }
-
-extern dword* SMI_CMD;
-extern byte ACPI_ENABLE;
-extern byte ACPI_DISABLE;
-extern dword* PM1a_CNT;
-extern dword* PM1b_CNT;
-extern word SLP_TYPa;
-extern word SLP_TYPb;
-extern word SLP_EN;
-extern word SCI_EN;
-extern byte PM1_CNT_LEN;
-
-void cmd_test(struct CONSOLE* cons) {
-    char buf[80];
-    sprintf(buf, "sizeof(struct RSDPtr): %d\n", sizeof(struct RSDPtr));
-    wrstr(buf);
-    uint* ptr = acpiCheckRSDPtr((uint*)0xe0000);
-    sprintf(buf, "acpiCheckRSDPtr(0xe0000): %x\n", ptr);
-    wrstr(buf);
-    sprintf(buf, "SLP_TYPa: %x\n", SLP_TYPa);
-    wrstr(buf);
-    sprintf(buf, "SLP_TYPb: %x\n", SLP_TYPb);
-    wrstr(buf);
-    return;
-}
-
-#define SIZE_APPMEM (64 * 1024)
 
 int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
@@ -568,7 +638,7 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
     for (i = 0; i < 13 && cmdline[i] > ' '; ++i) name[i] = cmdline[i];
     name[i] = '\0';
     strcpy(dbg_str[0], name);
-    finfo = file_search(name, (struct FILEINFO*)(ADDR_DISKIMG + 0x002600), 224);
+    finfo = file_search(name, (struct FILEINFO*)(ADDR_DISKIMG + 0x002600), 7 * 32);
     if (!finfo && name[i - 1] != '.') {
         strcat(name, ".HRB");
         strcpy(dbg_str[1], name);
@@ -643,11 +713,12 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
         case 4:
             return &(task->tss.esp0);
         case 5:
+            // open window
             sht = sheet_alloc(shtctl);
             sht->task = task;
             sht->flags |= SHEET_FLAGS_APP;
-            sheet_setbuf(sht, (char*)ebx + ds_base, esi, edi, eax);
-            make_window8((char*)ebx + ds_base, esi, edi, (char*)ecx + ds_base, 0);
+            sheet_setbuf(sht, (unsigned char*)ebx + ds_base, esi, edi, eax);
+            make_window8((unsigned char*)ebx + ds_base, esi, edi, (char*)ecx + ds_base, 0);
             sheet_slide(sht, ((shtctl->xsize - esi) / 2) & ~3, (shtctl->ysize - edi) / 2);
             sheet_updown(sht, shtctl->top);  // on task_a
             reg[7] = (int)sht;               // removed when -O2
@@ -730,8 +801,8 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
                         cons->cur_c = -1;
                         break;
                 }
-                if (i >= KEYSIG_BIT) {  // keyboard signal
-                    reg[7] = i & ~KEYSIG_BIT;
+                if (i >= SIGNAL_KEY) {  // keyboard signal
+                    reg[7] = i & ~SIGNAL_KEY;
                     break;
                 }
             }
@@ -743,7 +814,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             break;
         case 17:
             // initialize timer
-            timer_init((struct TIMER*)ebx, &task->fifo, eax + KEYSIG_BIT);
+            timer_init((struct TIMER*)ebx, &task->fifo, eax | SIGNAL_KEY);
             break;
         case 18:
             // set timer
@@ -851,22 +922,55 @@ int* inthandler0d(int* esp) {
     return &(task->tss.esp0);
 }
 
-#define PADDING_LEFT    8
-#define PADDING_RIGHT   16
-#define PADDING_ABOVE   28
-#define PADDING_DOWN    37
+void cmd_testi(struct CONSOLE* cons, int arg) {
+    struct FIFO32* fifo = ((struct FIFO32*)0x51e8);
+    switch (arg) {
+        case 1:
+            cons_dprintf = cons;
+            dprintf("cons set successfully. (cons: %x)\n", cons_dprintf);
+            return;
+        case 2:
+            dprintf("status: %d\n", fifo32_status(fifo));
+            return;
+        default:
+            dprintf("&%d->fifo:\t%x\n", arg, &((struct TASK*)arg)->fifo);
+            dprintf(" %d->fifo:\t%x\n", arg, ((struct TASK*)arg)->fifo);
+            return;
+    }
+}
 
-struct SHEET* open_console(struct SHTCTL* shtctl, uint memtotal) {
+void cmd_testc(struct CONSOLE* cons, char* arg){
+    struct FIFO32* fifo = ((struct FIFO32*)0x51e8);
+    int n = strlen(arg);
+    char data;
+    dprintf("fifo:[%x]\n", fifo);
+    dprintf("arg:[");
+    dprintf(arg);
+    dprintf("](%d)\n", n);
+    for (int i = 0; i < n;++i){
+        if(arg[i]=='\\'){
+            ++i;
+            if (arg[i] == 'n') {
+                data = '\n';
+            }
+            if (arg[i] == 't') {
+                data = '\t';
+            }
+        }
+        else
+            data = arg[i];
+        fifo32_put(fifo, data | SIGNAL_KEY);
+        dprintf("send to fifo: %d | SIG = %d\n", data, data | SIGNAL_KEY);
+    }
+}
+
+struct TASK* open_constask(struct SHEET* sht, uint memtotal) {
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
-    struct SHEET* sht = sheet_alloc(shtctl);
-    uint wsize_x = 256, wsize_y = 165, size_fifo = 128;
-    unsigned char* buf = (unsigned char*)memman_alloc_4k(memman, wsize_x * wsize_y);
     struct TASK* task = task_alloc();
+    uint size_fifo = SIZE_FIFO_CONS;
     int* cons_fifo = (int*)memman_alloc_4k(memman, size_fifo * sizeof(int));
-    sheet_setbuf(sht, buf, wsize_x, wsize_y, -1);  // no transparent color
-    make_window8(buf, wsize_x, wsize_y, "console", FALSE);
-    make_textbox8(sht, PADDING_LEFT, PADDING_ABOVE, wsize_x - PADDING_RIGHT, wsize_y - PADDING_DOWN, COL8_000000);
-    task->tss.esp = memman_alloc_4k(memman, 64 * 1024) + 64 * 1024 - 12;
+    task->cons_stack = memman_alloc_4k(memman, SIZE_APPMEM);
+    task->tss.esp = task->cons_stack + SIZE_APPMEM - 12;
     task->tss.eip = (int)&console_task;
     task->tss.es = 1 * 8;
     task->tss.cs = 2 * 8;
@@ -874,12 +978,88 @@ struct SHEET* open_console(struct SHTCTL* shtctl, uint memtotal) {
     task->tss.ds = 1 * 8;
     task->tss.fs = 1 * 8;
     task->tss.gs = 1 * 8;
-    // task->tss.eip arguments
-    *((int*)(task->tss.esp + 4)) = (int)sht; // 1st arg
-    *((int*)(task->tss.esp + 8)) = memtotal; // 2nd arg
+    // (task->tss.eip): console_task arguments
+    *((int*)(task->tss.esp + 4)) = (int)sht;  // 1st arg
+    *((int*)(task->tss.esp + 8)) = memtotal;  // 2nd arg
     task_run(task, 2, 2);
-    sht->task = task;
-    sht->flags |= SHEET_FLAGS_CURSOR;
     fifo32_init(&task->fifo, size_fifo, cons_fifo, task);
+    dprintf("constask opened\n");
+    dprintf("sht:\t%x\n", sht);
+    dprintf("task:\t%x\n", task);
+    if (task) {
+        dprintf("L flags:\t");
+        switch(task->flags){
+            case TASK_STATE_STOPPED:
+                dprintf("STOPPED\n");
+                break;
+            case TASK_STATE_WAITING:
+                dprintf("WAITING\n");
+                break;
+            case TASK_STATE_RUNNING:
+                dprintf("RUNNING\n");
+                break;
+        }
+        dprintf("L &fifo:\t%x\n", &task->fifo);
+        dprintf("L  fifo:\t%x\n", task->fifo);
+    }
+    return task;
+}
+
+void close_constask(struct TASK* task) {
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+    task_sleep(task);
+    memman_free_4k(memman, task->cons_stack, SIZE_APPMEM);
+    memman_free_4k(memman, (int)task->fifo.buf, SIZE_FIFO_CONS * sizeof(int));
+    task->flags = 0;
+    dprintf("constask closed (task: %x)\n", task);
+    return;
+}
+
+struct SHEET* open_console(struct SHTCTL* shtctl, uint memtotal, uint height, uint width) {
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+    struct SHEET* sht = sheet_alloc(shtctl);
+    uint wsize_x = width, wsize_y = height;
+    unsigned char* buf = (unsigned char*)memman_alloc_4k(memman, wsize_x * wsize_y);
+    sheet_setbuf(sht, buf, wsize_x, wsize_y, -1);  // no transparent color
+    make_window8(buf, wsize_x, wsize_y, "console", FALSE);
+    make_textbox8(sht, PADDING_LEFT, PADDING_ABOVE, wsize_x - PADDING_LEFT - PADDING_RIGHT, wsize_y - PADDING_ABOVE - PADDING_DOWN, COL8_000000);
+    sht->task = open_constask(sht, memtotal);
+    sht->flags |= SHEET_FLAGS_CURSOR;
     return sht;
+}
+
+void close_console(struct SHEET* sht) {
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+    struct TASK* task = sht->task;
+    memman_free_4k(memman, (int)sht->buf, sht->bxsize * sht->bysize);
+    sheet_free(sht);
+    close_constask(task);
+    return;
+}
+
+void cmd_start(struct CONSOLE* cons, char* cmdline, int memtotal) {
+    struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
+    struct SHEET* sht = open_console(shtctl, memtotal, 384, 165);
+    struct FIFO32* fifo = &sht->task->fifo;
+    sheet_slide(sht, 300, 300);
+    sheet_updown(sht, shtctl->top);
+    for (int i = strlen("start "); cmdline[i]; ++i)
+        fifo32_put(fifo, cmdline[i] | SIGNAL_KEY);
+    fifo32_put(fifo, '\n' | SIGNAL_KEY);
+    cons_newline(cons);
+    return;
+}
+
+void cmd_ncst(struct CONSOLE* cons, char* cmdline, int memtotal) {
+    struct TASK* task = open_constask(NULL, memtotal);
+    struct FIFO32* fifo = &task->fifo;
+    char buf[32] = {0};
+    dprintf("cmd_ncst fifo:%x\n", fifo);
+    for (int i = strlen("ncst "); cmdline[i]; ++i) {
+        fifo32_put(fifo, cmdline[i] | SIGNAL_KEY);
+    }
+    fifo32_put(fifo, '\n' | SIGNAL_KEY);
+    dprintf("Status: %d\n", fifo32_status(fifo));
+    cons_newline(cons);
+    return;
 }

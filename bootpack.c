@@ -51,6 +51,8 @@ extern struct FIFO8 mousefifo;
 extern struct TIMERCTL timerctl;
 extern char ENABLE_TIMECNT;
 
+extern struct TASKCTL* taskctl;
+
 #define KEYBDBUF_SIZ 32
 #define MOUSEBUF_SIZ 3
 #define FIFO_SIZ 0x80
@@ -67,7 +69,7 @@ void HariMain(void) {
     int fifobuf[FIFO_SIZ], keycmd_buf[32], *cons_fifo[CONS_NUM];
     struct TIMER* timer[1];
     int mx, my;
-    int x, y;
+    int x = 0, y = 0;
     int mmx = -1, mmy = -1;
     int mhx = -1, mhy = -1;
     int mmx2 = 0;
@@ -77,7 +79,7 @@ void HariMain(void) {
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct SHTCTL* shtctl;
-    struct SHEET *sht_back, *sht_mouse, *sht_cons[CONS_NUM], *sht = NULL;
+    struct SHEET *sht_back, *sht_mouse, *sht = NULL;
     unsigned char *buf_back, buf_mouse[256], *buf_cons[CONS_NUM];
 
     struct TASK *task_a, *task_cons[CONS_NUM], *task;
@@ -91,8 +93,10 @@ void HariMain(void) {
     init_pic();
     io_sti();  // remove a prohibition of interrupt since IDT/PIC initialization has finished
     fifo32_init(&fifo, sizeof(fifobuf) / sizeof(int), fifobuf, NULL);
-    init_keyboard(&fifo, KEYSIG_BIT);
-    enable_mouse(&fifo, MOUSESIG_BIT, &mdec);
+    init_keyboard(&fifo, SIGNAL_KEY);
+    enable_mouse(&fifo, SIGNAL_MOUSE, &mdec);
+
+    *((int*)ADDR_FIFO_TASK_A) = (int)&fifo;
 
     init_pit();
     io_out8(PIC0_IMR, 0xf8);  // accept interrupt by IRQ0-2
@@ -150,23 +154,19 @@ void HariMain(void) {
     my = (binfo->scrny - 28 - 16) / 2;
 
     // sht_cons
-    int cons_height = 480;
-    int cons_width = 640;
+    const int cons_height = 480;
+    const int cons_width = 560;
 
-    sht_cons[0] = open_console(shtctl, memtotal);
-    sht_cons[1] = NULL;
+    key_win = open_console(shtctl, memtotal, cons_height, cons_width);
 
     sheet_slide(sht_back, 0, 0);
-    sheet_slide(sht_cons[0], 32, 4);
-    //sheet_slide(sht_cons[1], 300, 4);
+    sheet_slide(key_win, 600, 300);
     sheet_slide(sht_mouse, mx, my);
 
     sheet_updown(sht_back, 0);
-    sheet_updown(sht_cons[0], 1);
-    //sheet_updown(sht_cons[1], 2);
+    sheet_updown(key_win, 1);
     sheet_updown(sht_mouse, 2);
 
-    key_win = sht_cons[0];
     keywin_on(key_win);
 
     int timeitv[] = {50};
@@ -182,6 +182,8 @@ void HariMain(void) {
 
     fifo32_put(&keycmd, KEYCMD_LED);
     fifo32_put(&keycmd, key_leds);
+
+    int wingen_x = 32, wingen_y = 4;
 
     for (;;) {
         if (fifo32_status(&keycmd) > 0 && keycmd_wait < 0) {
@@ -224,29 +226,61 @@ void HariMain(void) {
             int data = fifo32_get(&fifo);
             sprintf(buf, "fifo:[%3d](%4d)", fifo32_status(&fifo), data);
             putfonts8_sht(sht_back, 0, 17, COL8_FFFFFF, COL8_008484, buf, strlen(buf));
-#define disp_var(var, spc, y) { sprintf(buf, #var":"spc"%10d", var); \
-            putfonts8_sht(sht_back, 0, 300+y*18, COL8_FFFFFF, COL8_008484, buf, strlen(buf)); }
-            disp_var(x, "       ", 0);
-            disp_var(y, "       ", 1);
-            disp_var(mx, "      ", 2);
-            disp_var(my, "      ", 3);
-            disp_var(mmx, "     ", 4);
-            disp_var(mmy, "     ", 5);
-            disp_var(mmx2, "    ", 6);
-            disp_var(mhx, "     ", 7);
-            disp_var(mhy, "     ", 8);
-            disp_var(new_mx, "  ", 9);
-            disp_var(new_my, "  ", 10);
-            disp_var(new_wx, "  ", 11);
-            disp_var(new_wy, "  ", 12);
-            disp_var(hold_bar, "", 13);
-            io_sti();
-            if (!key_win->flags) {
-                key_win = shtctl->sheets[shtctl->top - 1];
-                keywin_on(key_win);
+
+#define disp_var_name(name, spc, var, y)                                                      \
+    {                                                                                         \
+        sprintf(buf, #name ":" spc "%10d", var);                                              \
+        putfonts8_sht(sht_back, x_disp, 300 + y * 18, COL8_FFFFFF, COL8_008484, buf, strlen(buf)); \
+    }
+#define disp_var(var, spc, y) disp_var_name(var, spc, var, y)
+            int cnt_disp = 0, x_disp = 0;
+            disp_var(x, "       ", cnt_disp++);
+            disp_var(y, "       ", cnt_disp++);
+            disp_var(mx, "      ", cnt_disp++);
+            disp_var(my, "      ", cnt_disp++);
+            disp_var(mmx, "     ", cnt_disp++);
+            disp_var(mmy, "     ", cnt_disp++);
+            disp_var(mmx2, "    ", cnt_disp++);
+            disp_var(mhx, "     ", cnt_disp++);
+            disp_var(mhy, "     ", cnt_disp++);
+            disp_var(new_mx, "  ", cnt_disp++);
+            disp_var(new_my, "  ", cnt_disp++);
+            disp_var(new_wx, "  ", cnt_disp++);
+            disp_var(new_wy, "  ", cnt_disp++);
+            disp_var(hold_bar, "", cnt_disp++);
+            disp_var_name(mem_use, " ", memman_total(memman) / (1 << 10), cnt_disp++);
+            disp_var_name(sht_a, "   ", sht_back, cnt_disp++);
+            disp_var(sht, "     ", cnt_disp++);
+            if (sht) {
+                disp_var(sht->vx0, "   ", cnt_disp++);
+                disp_var(sht->vy0, "   ", cnt_disp++);
+                disp_var(sht->bxsize, "", cnt_disp++);
+                disp_var(sht->bysize, "", cnt_disp++);
+                disp_var(sht->buf, "   ", cnt_disp++);
             }
-            if (data & KEYSIG_BIT) {  // KEYBOARD
-                data &= ~KEYSIG_BIT;
+            x_disp += 200, cnt_disp = 0;
+            disp_var_name(key_win, " ", key_win, cnt_disp++);
+            if(key_win){
+                disp_var_name(task, "    ", key_win->task, cnt_disp++);
+                disp_var_name(flags, "   ", key_win->flags, cnt_disp++);
+                disp_var_name(t.stack, " ", key_win->task->cons_stack, cnt_disp++);
+            }else{
+                disp_var_name(task, "    ", -1, cnt_disp++);
+                disp_var_name(flags, "   ", -1, cnt_disp++);
+                disp_var_name(t.stack, " ", -1, cnt_disp++);
+            }
+
+            io_sti();
+            if (!key_win->flags && key_win) {
+                if(shtctl->top - 1 >= 0){
+                    key_win = shtctl->sheets[shtctl->top - 1];
+                    keywin_on(key_win);
+                }
+                else
+                    key_win = NULL;
+            }
+            if ((data & MASK_SIGNAL) == SIGNAL_KEY) {  // KEYBOARD
+                data &= ~SIGNAL_KEY;
                 sprintf(buf, "%02X %08b", data, data);
                 putfonts8_sht(sht_back, 0, 49, COL8_FFFFFF, COL8_008484, buf, 11);
 
@@ -267,42 +301,51 @@ void HariMain(void) {
                 putfonts8_sht(sht_back, 0, 129, COL8_FFFFFF, COL8_008484, buf, 20);
 
                 if (!release) {
-                    task = key_win->task;
                     char ch = keycode_tochar(data, !!key_shift ^ !!(key_leds & 4));
                     if (data == 0x1c) {  // Enter
-                        fifo32_put(&task->fifo, KEYSIG_BIT | '\n');
+                        if (key_win) fifo32_put(&key_win->task->fifo, SIGNAL_KEY | '\n');
                     }
                     if (data == 0x0e) {  // Backspace
-                        fifo32_put(&task->fifo, KEYSIG_BIT | '\b');
+                        if (key_win) fifo32_put(&key_win->task->fifo, SIGNAL_KEY | '\b');
                     }
                     if (ch) {
                         if (key_ctrl && key_shift && tolower(ch) == 'q') {
-                            cons_putstr0(task->cons, "Ctrl + Shift + Q\n");
-                            goto QUIT_MAIN;
+                            if (key_win) keywin_off(key_win);
+                            key_win = open_console(shtctl, memtotal, cons_height, cons_width);
+                            sheet_slide(key_win, 100, 100);
+                            sheet_updown(key_win, shtctl->top);
+                            keywin_on(key_win);
+                            cons_putstr0(key_win->task->cons, "Ctrl + Shift + Q\n");
+                            io_cli();
+                            fifo32_put(&key_win->task->fifo, 5);
+                            io_sti();
+                            while (TRUE) task_sleep(task_a);
                         }
                         else if (key_ctrl && tolower(ch) == 'c') {  // Ctrl + c
-                            if (task && task->tss.ss0) {
-                                cons_putstr0(task->cons, "User Interrupt Detected.\n");
-                                cons_putstr0(task->cons, "The current process will be terminated...\n");
-                                fifo32_put(&task->fifo, 127);  // sends 127 to break for loop immediately
-                                io_cli();
-                                task->tss.eax = (int)&(task->tss.esp0);
-                                task->tss.eip = (int)asm_end_app;
-                                io_sti();
-                            } else {
-                                cons_putchar(task->cons, ' ', FALSE);
-                                cons_putstr0(task->cons, "\n>");
+                            if(key_win){
+                                if (key_win->task && key_win->task->tss.ss0) {
+                                    cons_putstr0(key_win->task->cons, "User Interrupt Detected.\n");
+                                    cons_putstr0(key_win->task->cons, "The current process will be terminated...\n");
+                                    fifo32_put(&key_win->task->fifo, 127);  // sends 127 to break for loop immediately
+                                    io_cli();
+                                    key_win->task->tss.eax = (int)&(key_win->task->tss.esp0);
+                                    key_win->task->tss.eip = (int)asm_end_app;
+                                    io_sti();
+                                    task_run(task, -1, 0); // wake up the task
+                                } else {
+                                    cons_putchar(key_win->task->cons, ' ', FALSE);
+                                    cons_putstr0(key_win->task->cons, "\n>");
+                                }
                             }
                         } else if (key_ctrl && tolower(ch) == 'n') {  // Ctrl + n
-                            if(!sht_cons[1]){
-                                sht_cons[1] = open_console(shtctl, memtotal);
-                                sheet_slide(sht_cons[1], 32, 4);
-                                sheet_updown(sht_cons[1], shtctl->top);
-                                keywin_off(key_win);
-                                keywin_on(key_win = sht_cons[1]);
-                            }
+                            if (key_win) keywin_off(key_win);
+                            key_win = open_console(shtctl, memtotal, cons_height, cons_width);
+                            sheet_slide(key_win, wingen_x += 16, wingen_y += 16);
+                            sheet_updown(key_win, shtctl->top);
+                            keywin_on(key_win);
+                            if (wingen_x >= 160) wingen_x = 16, wingen_y = -20;
                         } else {
-                            fifo32_put(&task->fifo, ch | KEYSIG_BIT);
+                            if (key_win && key_win->task) fifo32_put(&key_win->task->fifo, ch | SIGNAL_KEY);
                         }
                     }
                     if (data == 0x2a) {  // LShift
@@ -321,11 +364,13 @@ void HariMain(void) {
                         sheet_updown(shtctl->sheets[1], shtctl->top - 1);
                     }
                     if (data == 0x0f) {  // Tab
-                        keywin_off(key_win);
-                        int i = key_win->height - 1;
-                        if (!i) i = shtctl->top - 1;
-                        key_win = shtctl->sheets[i];
-                        keywin_on(key_win);
+                        if(key_win){
+                            keywin_off(key_win);
+                            int i = key_win->height - 1;
+                            if (!i) i = shtctl->top - 1;
+                            key_win = shtctl->sheets[i];
+                            keywin_on(key_win);
+                        }
                     }
                     if (data == 0x3a) {  // CapsLock
                         key_leds ^= 4;
@@ -353,8 +398,8 @@ void HariMain(void) {
                         key_ctrl &= ~1;
                     }
                 }
-            } else if (data & MOUSESIG_BIT) {  // MOUSE
-                data &= ~MOUSESIG_BIT;
+            } else if ((data & MASK_SIGNAL) == SIGNAL_MOUSE) {  // MOUSE
+                data &= ~SIGNAL_MOUSE;
                 if (mouse_decode(&mdec, data)) {
                     sprintf(buf, "[lcr]{cns}");
                     if (mdec.btn & 0x01) buf[1] = 'L';
@@ -420,9 +465,11 @@ void HariMain(void) {
                     } else {
                         // left button release
                         if (mhx >= 0) {
+                            if(sht){
+                                x = mx - sht->vx0;
+                                y = my - sht->vy0;
+                            }
                             // close button
-                            x = mx - sht->vx0;
-                            y = my - sht->vy0;
                             if (sht->bxsize - x == clamp(sht->bxsize - x, 6, 21) && y == clamp(y, 5, 18)) {
                                 task = sht->task;
                                 cons_putstr0(task->cons, "User Interrupt (Mouse) Detected.\n");
@@ -433,9 +480,16 @@ void HariMain(void) {
                                     task->tss.eax = (int)&(task->tss.esp0);
                                     task->tss.eip = (int)asm_end_app;
                                     io_sti();
-                                } else {
-                                    cons_putstr0(task->cons, "The current process is not an app.\n");
+                                    task_run(task, -1, 0);  // wake up the task
+                                } else { // console
+                                    io_cli();
+                                    fifo32_put(&task->fifo, 4);
+                                    io_sti();
                                 }
+                            }
+                            else if(!hold_bar){
+                                // draw dragged area
+                                //drawrect8();
                             }
                             mmx = mhx = -1, hold_bar = FALSE;
                             sht = NULL;
@@ -446,6 +500,10 @@ void HariMain(void) {
                         }
                     }
                 }
+            } else if((data & MASK_SIGNAL) == SIGNAL_EXIT){
+                close_console(shtctl->sheets0 + (data & ~SIGNAL_EXIT));
+            } else if ((data & MASK_SIGNAL) == SIGNAL_EXIT_HEADLESS) {
+                close_constask(taskctl->tasks0 + (data & ~SIGNAL_EXIT_HEADLESS));
             } else {
                 switch (data) {
                     case 0:
@@ -464,7 +522,6 @@ void HariMain(void) {
             }
         }
     }
-QUIT_MAIN:
     return;
 }
 

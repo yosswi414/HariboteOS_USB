@@ -10,7 +10,7 @@ FNC	= naskfunc
 HRB = haribote.sys
 DST = usbboot.img
 NASM = nasm
-CC = gcc -I $(INCLUDE)
+CC = gcc -I $(INCLUDE) -Wall
 LIB = mylibgcc
 DSC = desctable
 GRP = graphic
@@ -29,11 +29,11 @@ FIL = file
 ACPI = acpi
 SYS = sysfunc
 
-PROG_CHPT = 26
-PROG_PAGE = 545
+PROG_CHPT = 27
+PROG_PAGE = 570
 
 OBJS = $(SYS).obj $(ACPI).obj $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
-CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
+CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -fno-delete-null-pointer-checks -nostdlib -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
 CFLAGS_O0 = -O0 $(CFLAGS_BASE)
 CFLAGS_SW = $(CFLAGS_O2)
@@ -99,7 +99,7 @@ $(BTP).obj : $(BTP).c makefile
 		-D'PROGRESS_MIN="$(shell date '+%M')"'
 
 a_nasm.obj : a_nasm.asm makefile
-	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm
+	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm -l a.nasm.lst
 
 %.obj : %.c $(INCLUDE)/%.h makefile
 	$(CC) $(CFLAGS_SW) $*.c -o $@

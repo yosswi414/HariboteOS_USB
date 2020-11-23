@@ -49,7 +49,7 @@ char* strcat(char* restrict s1, const char* restrict s2) {
     char* dst = s1;
     const char* src = s2;
     while (*dst) dst++;
-    while (*(dst++) = *(src++)) {}
+    while ((*(dst++) = *(src++))) {}
     return s1;
 }
 
@@ -238,8 +238,10 @@ int sprintf(char* restrict s, const char* restrict format, ...) {
                     break;
                 case 's':
                     p = va_arg(ap, char*);
-                    if (len + strlen(p) + 1 > BUF_SIZ) is_valid = FALSE;
-                    strcpy(str, p);
+                    if (len + strlen(p) + 1 > BUF_SIZ)
+                        is_valid = FALSE;
+                    else
+                        strcpy(str, p);
                     break;
                 case 'd':
                     itoa(va_arg(ap, int), str, 10);

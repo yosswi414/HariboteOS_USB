@@ -18,7 +18,7 @@ void HariMain(){
         if (i == '6') x = min(x + 1, 18);
         if (i == '8') y = max(y - 1, 0);
         if (i == '2') y = min(y + 1, 4);
-        if (i == 0x0a) break;
+        if (i == '\n') break;
         api_putstrwin(win, x * 8 + 4, y * 16 + 24, COL8_FFFF00, 1, "@");
     }
     api_closewin(win);

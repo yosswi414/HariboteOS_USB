@@ -28,7 +28,7 @@ void inthandler21(int* esp) {
     int data;
     io_out8(PIC0_OCW2, 0x61);    // notify PIC that IRQ01 has been accepted
     data = io_in8(PORT_KEYDAT);  // receive key code
-    fifo32_put(key_fifo, data + key_offset);
+    fifo32_put(key_fifo, data | key_offset);
     return;
 }
 

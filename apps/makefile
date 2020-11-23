@@ -7,7 +7,7 @@ NASM = nasm
 INCLUDE = ../include
 CC = gcc -I $(INCLUDE)
 
-CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -nostdlib -c
+CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -fno-delete-null-pointer-checks -nostdlib -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
 CFLAGS_O0 = -O0 $(CFLAGS_BASE)
 CFLAGS_SW = $(CFLAGS_O2)

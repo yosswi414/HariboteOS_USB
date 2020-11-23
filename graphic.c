@@ -64,6 +64,19 @@ void boxfill8(unsigned char* vram, int xsize, unsigned char c, int x0, int y0, i
     return;
 }
 
+void drawrect8(unsigned char* vram, int xsize, unsigned char c, int x0, int y0, int x1, int y1) {
+    int x, y;
+    for (y = y0; y <= y1;++y){
+        vram[y * xsize + x0] = c;
+        vram[y * xsize + x1] = c;
+    }
+    for (x = x0 + 1; x < x1;++x){
+        vram[y0 * xsize + x] = c;
+        vram[y1 * xsize + x] = c;
+    }
+    return;
+}
+
 void init_screen(unsigned char* vram, int x, int y) {
     boxfill8(vram, x, COL8_008484, 0, 0, x - 1, y - 29);
     boxfill8(vram, x, COL8_C6C6C6, 0, y - 28, x - 1, y - 28);

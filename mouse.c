@@ -57,7 +57,7 @@ void inthandler2c(int* esp) {
     io_out8(PIC0_OCW2, 0x62);  // notify PIC that IRQ02 has been accepted
     data = io_in8(PORT_KEYDAT);
     if (mouse_queue < MAX_MOUSEQUE * 3) {
-        fifo32_put(mouse_fifo, data + mouse_offset);
+        fifo32_put(mouse_fifo, data | mouse_offset);
         mouse_queue++;
     }
     return;
