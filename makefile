@@ -115,7 +115,7 @@ FILES = asmhead.asm btp.ld README.md $(INCLUDE)/window.h console.c Sarah_Crowely
 CONTENT = $(CORE) $(FILES)
 
 # APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb
-APPS = color2.hrb color.hrb beepdown.hrb noodle.hrb walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
+APPS = crack7.hrb color2.hrb color.hrb beepdown.hrb noodle.hrb walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
 REQ = a_nasm.obj mylibgcc.obj
 
 builder.txt :

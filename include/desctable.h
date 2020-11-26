@@ -11,6 +11,8 @@
 #define AR_TSS32 0x0089
 #define AR_INTGATE32 0x008e
 
+#define AR_LDT 0x0082
+
 struct SEGMENT_DESCRIPTOR {
     short limit_low, base_low;
     char base_mid, access_right;

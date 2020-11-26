@@ -2,6 +2,7 @@
 
 #include "fifo.h"
 #include "memory.h"
+#include "desctable.h"
 
 #define MAX_TASKS 1000
 #define TASK_GDT0 3  // beginning point of TSS in GDT
@@ -28,6 +29,8 @@ struct TASK {
     struct TSS32 tss;
     struct CONSOLE* cons;
     int ds_base, cons_stack;
+
+    struct SEGMENT_DESCRIPTOR ldt[2];
 };
 
 struct TASKLEVEL {

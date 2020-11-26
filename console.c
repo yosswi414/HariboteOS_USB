@@ -41,7 +41,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
     cons.cur_c = -1;
     cons.cur_x = 0;
     cons.cur_y = 0;
-    if (sheet) {
+    if (cons.sht) {
         cons.timer = timer_alloc();
         timer_init(cons.timer, &task->fifo, 1);
         timer_settime(cons.timer, 50);
@@ -54,18 +54,18 @@ void console_task(struct SHEET* sheet, int memtotal) {
     // usually cons.width depends on the size of console window.
     // when it comes to console-less mode, it should not be like above.
     // subtracting 5 itself has no definite reason or purpose.
-    if (!sheet) cons.width = 128 - 5;
+    if (!cons.sht) cons.width = 128 - 5;
 
     // allow to access cons from anywhere
     //*((int*)ADDR_CONSOLE) = (int)&cons;
     task->cons = &cons;
 
-    sprintf(buf, "bsize: (%d, %d)\n", sheet->bxsize, sheet->bysize);
+    sprintf(buf, "bsize: (%d, %d)\n", cons.sht->bxsize, cons.sht->bysize);
     cons_putstr0(task->cons, buf);
 
     cons_putchar(&cons, '>', TRUE);
 
-    dprintf("f, s: %x, %x\n", &task->fifo, sheet);
+    dprintf("f, s: %x, %x\n", &task->fifo, cons.sht);
 
     while (TRUE) {
         io_cli();
@@ -75,20 +75,24 @@ void console_task(struct SHEET* sheet, int memtotal) {
         } else {
             int data = fifo32_get(&task->fifo);
             io_sti();
-            if (!sheet) {
-                dprintf("nc received: [%d](sht:%x)\n", data, sheet);
+            if (!cons.sht) {
+                dprintf("nc received: [%d](sht:%x)\n", data, cons.sht);
             }
             if (data <= 1) {  // timer for cursor
-                timer_init(cons.timer, &task->fifo, 1 - data);
-                if (cons.cur_c >= 0) cons.cur_c = data ? COL8_FFFFFF : COL8_000000;
-                timer_settime(cons.timer, 50);
-                //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, cons.cur_c, " ", 1);
+                if (cons.sht){
+                    timer_init(cons.timer, &task->fifo, 1 - data);
+                    if (cons.cur_c >= 0) cons.cur_c = data ? COL8_FFFFFF : COL8_000000;
+                    timer_settime(cons.timer, 50);
+                    //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, cons.cur_c, " ", 1);
+                }
             }
             if (data == 2) cons.cur_c = COL8_FFFFFF;
-            if (data == 3) {
+            if (data == 3) { // cursor off
                 cons.cur_c = -1;
-                boxfill8(cons.sht->buf, cons.sht->bxsize, COL8_000000, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, (cons.cur_x + 1) * 8 + cons.off_x - 1, (cons.cur_y + 1) * 16 + cons.off_y - 1);
-                //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, COL8_000000, " ", 1);
+                if (cons.sht){
+                    boxfill8(cons.sht->buf, cons.sht->bxsize, COL8_000000, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, (cons.cur_x + 1) * 8 + cons.off_x - 1, (cons.cur_y + 1) * 16 + cons.off_y - 1);
+                    //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, COL8_000000, " ", 1);
+                }
             }
             if (data == 4) {
                 cmd_exit(&cons, fat);
@@ -99,14 +103,14 @@ void console_task(struct SHEET* sheet, int memtotal) {
             if ((data & MASK_SIGNAL) == SIGNAL_KEY) {
                 
                 data &= ~SIGNAL_KEY;
-                if (!sheet) dprintf("received: %c\n", data);
+                if (!cons.sht) dprintf("received: %c\n", data);
                 if (data == '\b') {
                     if (cons.cur_x > 1) {
                         cons_putchar(&cons, ' ', FALSE);
                         cons.cur_x--;
                     }
                 } else if (data == '\n') {
-                    putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_FFFFFF, COL8_000000, " ", 1);
+                    putfonts8_sht(cons.sht, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_FFFFFF, COL8_000000, " ", 1);
                     cons_putchar(&cons, ' ', FALSE);
                     cmdline[cons.cur_x - 1] = '\0';
                     //putfonts8_sht(sheet, 20, 20, COL8_FF0000, COL8_008484, cmdline, strlen(cmdline));
@@ -114,15 +118,15 @@ void console_task(struct SHEET* sheet, int memtotal) {
                     //cons.cur_y = cons_newline(cons.cur_y, sheet);
                     cons_newline(&cons);
                     cons_runcmd(cmdline, &cons, fat, memtotal);
-                    if(!sheet){
+                    if (!cons.sht) {
                         dprintf("nc command: [%s]\n", cmdline);
                     }
-                    if (!sheet) cmd_exit(&cons, fat);
+                    if (!cons.sht) cmd_exit(&cons, fat);
                     cons_putchar(&cons, '>', TRUE);
                 } else {
-                    if (!sheet) dprintf("* ");
+                    if (!cons.sht) dprintf("* ");
                     if (cons.cur_x + 1 < cons.width) {
-                        if (!sheet) dprintf("$(%d) ", cons.cur_x);
+                        if (!cons.sht) dprintf("$(%d) ", cons.cur_x);
                         //buf[0] = data;
                         //buf[1] = '\0';
                         cmdline[cons.cur_x - 1] = data;
@@ -131,19 +135,19 @@ void console_task(struct SHEET* sheet, int memtotal) {
                         cons_putchar(&cons, data, TRUE);
                     }
                 }
-                if (!sheet) {
+                if (!cons.sht) {
                     dprintf("nc command: [%s]\n", cmdline);
                 }
             }
-            if (sheet) {
+            if (cons.sht) {
                 if (cons.cur_c >= 0) {
-                    boxfill8(sheet->buf, sheet->bxsize, cons.cur_c,
+                    boxfill8(cons.sht->buf, cons.sht->bxsize, cons.cur_c,
                              cons.cur_x * 8 + cons.off_x,
                              cons.cur_y * 16 + cons.off_y,
                              (cons.cur_x + 1) * 8 + cons.off_x - 1,
                              (cons.cur_y + 1) * 16 + cons.off_y - 1);
                 }
-                sheet_refresh(sheet,
+                sheet_refresh(cons.sht,
                               cons.cur_x * 8 + cons.off_x,
                               cons.cur_y * 16 + cons.off_y,
                               (cons.cur_x + 1) * 8 + cons.off_x,
@@ -594,9 +598,9 @@ void cmd_exit(struct CONSOLE* cons, int* fat) {
     memman_free_4k(memman, (int)fat, SIZE_FAT * sizeof(int));
     io_cli();
     if (cons->sht)
-        fifo32_put(fifo, (cons->sht - shtctl->sheets0) | SIGNAL_EXIT);
+        fifo32_put(fifo, (cons->sht - shtctl->sheets0) | SIGNAL_CONS_EXIT);
     else
-        fifo32_put(fifo, (task - taskctl->tasks0) | SIGNAL_EXIT_HEADLESS);
+        fifo32_put(fifo, (task - taskctl->tasks0) | SIGNAL_APP_EXIT);
     io_sti();
     while (TRUE) task_sleep(task);
 }
@@ -654,10 +658,11 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
             dathrb = *((int*)(p + 0x0014));
             q = (char*)memman_alloc_4k(memman, SIZE_APPMEM);
             task->ds_base = (int)q;
-            set_segmdesc(gdt + task->sel / 8 + 1000, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
-            set_segmdesc(gdt + task->sel / 8 + 2000, segsiz - 1, (int)q, AR_DATA32_RW + 0x60);
+            set_segmdesc(task->ldt + 0, finfo->size - 1, (int)p, AR_CODE32_ER + 0x60);
+            set_segmdesc(task->ldt + 1, segsiz - 1, (int)q, AR_DATA32_RW + 0x60);
             for (int i = 0; i < datsiz; ++i) q[esp + i] = p[dathrb + i];
-            start_app(0x1b, task->sel + 1000 * 8, esp, task->sel + 2000 * 8, &(task->tss.esp0));
+            // + 4 : means that this is segment number of LDT, not GDT
+            start_app(0x1b, 0 * 8 + 4, esp, 1 * 8 + 4, &(task->tss.esp0));
 
             shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
             for (int i = 0; i < MAX_SHEETS; ++i) {
@@ -684,6 +689,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
     struct CONSOLE* cons = task->cons;
     struct SHTCTL* shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
     struct SHEET* sht;
+    struct FIFO32* sys_fifo = (struct FIFO32*)*((int*)ADDR_FIFO_TASK_A);
     volatile int* reg = &eax + 1;
     char buf[80];
     /* reg: the pointer next to EAX
@@ -800,6 +806,12 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
                     case 3:  // cursor: OFF
                         cons->cur_c = -1;
                         break;
+                    case 4:
+                        timer_cancel(cons->timer);
+                        io_cli();
+                        fifo32_put(sys_fifo, (cons->sht - shtctl->sheets0) | SIGNAL_CONS_EXIT_LEAVING_APP);
+                        cons->sht = NULL;
+                        io_sti();
                 }
                 if (i >= SIGNAL_KEY) {  // keyboard signal
                     reg[7] = i & ~SIGNAL_KEY;

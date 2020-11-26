@@ -11,7 +11,11 @@
         - it may need to draw rectangle to represent the area of the window to be resized.
             - https://twitter.com/yosswi414_0/status/1330834570074148865
             - perhaps putting a transparent sheet that any of click passes through as the top and draw the rectangle on it will work well
----
+
+- [2020/11/24 08:22]
+    - progress: p.570 / day.27
+
+# About this text
 
 This text is made to remind me of some ideas about:
 
@@ -21,3 +25,8 @@ This text is made to remind me of some ideas about:
 - apps
 
 To maximize the effect of this document, it is preferred to show this text on the editor every time it launches.
+
+# Reference which helped resolving some problems
+- `-fno-delete-null-pointer-checks`
+    - https://qiita.com/AoiMoe/items/2554f78dc9c197d22109
+    - http://blog.kmckk.com/archives/1202810.html

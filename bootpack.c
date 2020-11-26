@@ -79,7 +79,7 @@ void HariMain(void) {
     uint memtotal;
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     struct SHTCTL* shtctl;
-    struct SHEET *sht_back, *sht_mouse, *sht = NULL;
+    struct SHEET *sht_back, *sht_mouse, *sht = NULL, *sht_hide = NULL;
     unsigned char *buf_back, buf_mouse[256], *buf_cons[CONS_NUM];
 
     struct TASK *task_a, *task_cons[CONS_NUM], *task;
@@ -463,6 +463,10 @@ void HariMain(void) {
                         }
 
                     } else {
+                        if (new_wx != 0x7fffffff) {
+                            if (hold_bar) sheet_slide(sht, new_wx, new_wy);
+                            new_wx = 0x7fffffff;
+                        }
                         // left button release
                         if (mhx >= 0) {
                             if(sht){
@@ -482,6 +486,9 @@ void HariMain(void) {
                                     io_sti();
                                     task_run(task, -1, 0);  // wake up the task
                                 } else { // console
+                                    sheet_updown(sht, -1);
+                                    keywin_off(key_win);
+                                    keywin_on(key_win = shtctl->sheets[shtctl->top - 1]);
                                     io_cli();
                                     fifo32_put(&task->fifo, 4);
                                     io_sti();
@@ -494,16 +501,17 @@ void HariMain(void) {
                             mmx = mhx = -1, hold_bar = FALSE;
                             sht = NULL;
                         }
-                        if(new_wx !=0x7fffffff){
-                            if(hold_bar)sheet_slide(sht, new_wx, new_wy);
-                            new_wx = 0x7fffffff;
-                        }
+                        
                     }
                 }
-            } else if((data & MASK_SIGNAL) == SIGNAL_EXIT){
-                close_console(shtctl->sheets0 + (data & ~SIGNAL_EXIT));
-            } else if ((data & MASK_SIGNAL) == SIGNAL_EXIT_HEADLESS) {
-                close_constask(taskctl->tasks0 + (data & ~SIGNAL_EXIT_HEADLESS));
+            } else if ((data & MASK_SIGNAL) == SIGNAL_CONS_EXIT) {
+                close_console(shtctl->sheets0 + (data & ~SIGNAL_CONS_EXIT));
+            } else if ((data & MASK_SIGNAL) == SIGNAL_APP_EXIT) {
+                close_constask(taskctl->tasks0 + (data & ~SIGNAL_APP_EXIT));
+            } else if ((data & MASK_SIGNAL) == SIGNAL_CONS_EXIT_LEAVING_APP) {
+                sht_hide = shtctl->sheets0 + (data & ~SIGNAL_CONS_EXIT_LEAVING_APP);
+                memman_free_4k(memman, (int)sht_hide->buf, cons_height * cons_width);
+                sheet_free(sht_hide);
             } else {
                 switch (data) {
                     case 0:
