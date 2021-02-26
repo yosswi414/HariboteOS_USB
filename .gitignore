@@ -45,7 +45,12 @@ Thumbs.db
 *.img
 *.map
 *.hrb
+*.lib
+*.so
+*.a
 *.vdi
+*.vmdk
+*.bak
 .clang-format
 .vscode
 z_tools/
