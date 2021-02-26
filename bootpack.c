@@ -509,6 +509,7 @@ void HariMain(void) {
             } else if ((data & MASK_SIGNAL) == SIGNAL_APP_EXIT) {
                 close_constask(taskctl->tasks0 + (data & ~SIGNAL_APP_EXIT));
             } else if ((data & MASK_SIGNAL) == SIGNAL_CONS_EXIT_LEAVING_APP) {
+                // sht_hide: sht2 in the book
                 sht_hide = shtctl->sheets0 + (data & ~SIGNAL_CONS_EXIT_LEAVING_APP);
                 memman_free_4k(memman, (int)sht_hide->buf, cons_height * cons_width);
                 sheet_free(sht_hide);

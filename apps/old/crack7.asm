@@ -4,13 +4,13 @@
 [SECTION .text]
 
 HariMain:
-    MOV     AX, 1005 * 8
+    MOV     AX, 4 ;1005 * 8
     MOV     DS, AX
     CMP     DWORD [DS:0x0004], 'Hari'
     JNE     .fin
 
     MOV     ECX, [DS:0x0000]
-    MOV     AX, 2005 * 8
+    MOV     AX, 12; 2005 * 8
     MOV     DS, AX
 
 .crackloop:

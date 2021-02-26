@@ -78,7 +78,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
             if (!cons.sht) {
                 dprintf("nc received: [%d](sht:%x)\n", data, cons.sht);
             }
-            if (data <= 1) {  // timer for cursor
+            if (data <= 1 && cons.sht) {  // timer for cursor
                 if (cons.sht){
                     timer_init(cons.timer, &task->fifo, 1 - data);
                     if (cons.cur_c >= 0) cons.cur_c = data ? COL8_FFFFFF : COL8_000000;
@@ -88,11 +88,16 @@ void console_task(struct SHEET* sheet, int memtotal) {
             }
             if (data == 2) cons.cur_c = COL8_FFFFFF;
             if (data == 3) { // cursor off
-                cons.cur_c = -1;
                 if (cons.sht){
-                    boxfill8(cons.sht->buf, cons.sht->bxsize, COL8_000000, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, (cons.cur_x + 1) * 8 + cons.off_x - 1, (cons.cur_y + 1) * 16 + cons.off_y - 1);
+                    boxfill8(cons.sht->buf, cons.sht->bxsize, COL8_000000,
+                        cons.cur_x * 8 + cons.off_x,
+                        cons.cur_y * 16 + cons.off_y,
+                        (cons.cur_x + 1) * 8 + cons.off_x - 1,
+                        (cons.cur_y + 1) * 16 + cons.off_y - 1
+                    );
                     //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, COL8_000000, " ", 1);
                 }
+                cons.cur_c = -1;
             }
             if (data == 4) {
                 cmd_exit(&cons, fat);
@@ -120,8 +125,9 @@ void console_task(struct SHEET* sheet, int memtotal) {
                     cons_runcmd(cmdline, &cons, fat, memtotal);
                     if (!cons.sht) {
                         dprintf("nc command: [%s]\n", cmdline);
+                        cmd_exit(&cons, fat);
                     }
-                    if (!cons.sht) cmd_exit(&cons, fat);
+                    
                     cons_putchar(&cons, '>', TRUE);
                 } else {
                     if (!cons.sht) dprintf("* ");
@@ -139,6 +145,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
                     dprintf("nc command: [%s]\n", cmdline);
                 }
             }
+            // show cursor
             if (cons.sht) {
                 if (cons.cur_c >= 0) {
                     boxfill8(cons.sht->buf, cons.sht->bxsize, cons.cur_c,
@@ -806,7 +813,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
                     case 3:  // cursor: OFF
                         cons->cur_c = -1;
                         break;
-                    case 4:
+                    case 4:  // close only console
                         timer_cancel(cons->timer);
                         io_cli();
                         fifo32_put(sys_fifo, (cons->sht - shtctl->sheets0) | SIGNAL_CONS_EXIT_LEAVING_APP);

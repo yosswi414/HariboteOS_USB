@@ -63,7 +63,7 @@ struct TASK* task_alloc(void) {
         task->tss.ss0 = 0;
         return task;
     }
-    return NULL;
+    return NULL; // failed to allocate
 }
 
 // priority == 0 : don't change priority

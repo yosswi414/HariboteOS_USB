@@ -3,6 +3,7 @@ MAKE	= make -r
 DEL = rm -f
 # -r (--no-builtin-rules) : eliminate use of the built-in implicit rules
 INCLUDE = ./include
+LIBRARY = -lapi -lmygcc
 ASH	= asmhead
 BTP	= bootpack
 IPL	= ipl.bin
@@ -11,6 +12,8 @@ HRB = haribote.sys
 DST = usbboot.img
 NASM = nasm
 CC = gcc -I $(INCLUDE) -Wall
+# CC = $(CC_L) $(LIBRARY)
+LINKER = ld $(LIBRARY)
 LIB = mylibgcc
 DSC = desctable
 GRP = graphic
@@ -29,11 +32,12 @@ FIL = file
 ACPI = acpi
 SYS = sysfunc
 
-PROG_CHPT = 27
-PROG_PAGE = 570
+PROG_CHPT = 28
+PROG_PAGE = 594
 
 OBJS = $(SYS).obj $(ACPI).obj $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
-CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -fno-delete-null-pointer-checks -nostdlib -c
+CFLAGS_ARCH = -march=i486 -m32 -fno-pie -fno-builtin -fno-delete-null-pointer-checks -nostdlib
+CFLAGS_BASE = $(CFLAGS_ARCH) -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
 CFLAGS_O0 = -O0 $(CFLAGS_BASE)
 CFLAGS_SW = $(CFLAGS_O2)
@@ -59,13 +63,18 @@ $(VDI) : img
 ifndef $(type $(VBM) > /dev/null 2>&1; echo $?)
 	$(eval VBM := vboxmanage.exe)
 endif
-	-$(DEL) *.vdi
+	-mv $(VDI) $(VDI).bak
+	-mv usbboot.vmdk usbboot.vmdk.bak
 	$(VBM) convertfromraw -format VDI $(DST) $(VDI)
+	$(VBM) convertfromraw -format VMDK $(DST) usbboot.vmdk
 	$(eval VM_UUID := $(shell $(VBM) list hdds | grep -e "^UUID" | awk '{print $$2}'))
 # $(VBM) storagectl $(VM_NAME) --name $(VM_SCTL) --portcount 1 --remove
 	$(VBM) internalcommands sethduuid $(VDI) $(VM_UUID)
+	# -$(VBM) setextradata $(VM_NAME) "VBoxInternal/Devices/i8254/0/Config/PassthroughSpeaker" 100
 	-$(VBM) storagectl $(VM_NAME) --name $(VM_SCTL) --add sata --controller IntelAHCI --portcount 1 --bootable on
 	-$(VBM) storageattach $(VM_NAME) --storagectl $(VM_SCTL) --device 0 --port 0 --type hdd --medium $(VDI)
+	cp $(VDI) /mnt/c/Users/yossw/Documents/img/
+	cp usbboot.vmdk /mnt/c/Users/yossw/Documents/img/
 
 # ファイル生成規則
 
@@ -98,8 +107,11 @@ $(BTP).obj : $(BTP).c makefile
 		-D'PROGRESS_HOUR="$(shell date '+%H')"' \
 		-D'PROGRESS_MIN="$(shell date '+%M')"'
 
-a_nasm.obj : a_nasm.asm makefile
-	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm -l a.nasm.lst
+# a_nasm.obj : a_nasm.asm makefile
+# 	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm -l a_nasm.lst
+
+%.obj : %.asm makefile
+	$(NASM) -f elf32 -o $@ $*.asm -l $*.lst
 
 %.obj : %.c $(INCLUDE)/%.h makefile
 	$(CC) $(CFLAGS_SW) $*.c -o $@
@@ -115,8 +127,22 @@ FILES = asmhead.asm btp.ld README.md $(INCLUDE)/window.h console.c Sarah_Crowely
 CONTENT = $(CORE) $(FILES)
 
 # APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb
-APPS = crack7.hrb color2.hrb color.hrb beepdown.hrb noodle.hrb walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
-REQ = a_nasm.obj mylibgcc.obj
+APPS = color2.hrb color.hrb beepdown.hrb noodle.hrb walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
+OBJS_API = api001.obj api002.obj api003.obj api004.obj api005.obj api006.obj api007.obj api008.obj api009.obj api010.obj api011.obj api012.obj api013.obj api014.obj api015.obj api016.obj api017.obj api018.obj api019.obj api020.obj
+OBJS_APIS = $(addprefix api/,$(OBJS_API))
+
+REQ = libapi.a libmygcc.a
+
+libapi.a : $(OBJS_APIS) makefile
+	ar rcs $@ $(OBJS_APIS)
+	# $(CC) $(CFLAGS_ARCH) -o $@ $(OBJS_APIS)
+libmygcc.a : $(LIB).obj makefile
+	ar rcs $@ $(LIB).obj
+	# $(CC) $(CFLAGS_ARCH) -o $@ mylibgcc.obj
+
+# REQ = a_nasm.obj mylibgcc.obj
+# REQ = $(OBJS_APIS) mylibgcc.obj
+
 
 builder.txt :
 	echo '[$$USER]' > $@
@@ -137,7 +163,7 @@ builder.txt :
 	echo `make --version` >> $@
 	
 
-%.hrb : apps/makefile makefile
+%.hrb : apps/makefile $(REQ) makefile
 	(cd apps; $(MAKE) $@)
 
 $(DST) : $(IPL) $(CONTENT) $(APPS) makefile
@@ -165,6 +191,10 @@ clean :
 	$(DEL) *.map
 	$(DEL) *.hrb
 	$(DEL) *.vdi
+	$(DEL) *.vmdk
+	$(DEL) *.lib
+	$(DEL) *.so
+	$(DEL) *.a
 	(cd apps; $(MAKE) clean)
 
 evacuate :

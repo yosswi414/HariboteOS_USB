@@ -1,4 +1,4 @@
-#include "api.h"
+#include "apilib.h"
 #include "graphic.h"
 
 uint rand_xor32(void) {
