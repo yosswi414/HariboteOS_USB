@@ -1,18 +1,10 @@
 #include "apilib.h"
 #include "graphic.h"
-
-uint rand_xor32(void) {
-    static uint y = 2463534242u;
-    y = y ^ (y << 13);
-    y = y ^ (y >> 17);
-    return y = y ^ (y << 5);
-}
+#include "mylibgcc.h"
 
 void HariMain(){
-    char* buf;
+    char buf[150 * 100];
     int win, x, y;
-    api_initmalloc();
-    buf = api_malloc(150 * 100);
     win = api_openwin(buf, 150, 100, -1, "stars");
     api_boxfillwin(win, 6, 26, 143, 93, COL8_000000);
     int points = 1e9;

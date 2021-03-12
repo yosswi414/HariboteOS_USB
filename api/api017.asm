@@ -1,13 +1,13 @@
 [BITS 32]
-        GLOBAL  api_settimer
+        GLOBAL  api_inittimer
 
 [SECTION .text]
 
-api_settimer:   ; void api_settimer(int timer, int time);
+api_inittimer:  ; void api_inittimer(int timer, int data);
         PUSH    EBX
-        MOV     EDX, 18
+        MOV     EDX, 17
         MOV     EBX, [ESP+8]    ; timer
-        MOV     EAX, [ESP+12]    ; time
+        MOV     EAX, [ESP+12]    ; data
         INT     0x40
         POP     EBX
         RET

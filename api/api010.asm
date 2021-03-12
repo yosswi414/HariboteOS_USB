@@ -1,19 +1,14 @@
 [BITS 32]
-        GLOBAL  api_point
+        GLOBAL  api_free
 
 [SECTION .text]
 
-api_point:      ; void api_point(int win, int x, int y, int col);
-        PUSH    EDI
-        PUSH    ESI
+api_free:       ; void api_free(char *addr, int size);
         PUSH    EBX
-        MOV     EDX, 11
-        MOV     EBX, [ESP+16]   ; win
-        MOV     ESI, [ESP+20]   ; x
-        MOV     EDI, [ESP+24]   ; y
-        MOV     EAX, [ESP+28]   ; col
+        MOV     EDX, 10
+        MOV     EBX, [CS:0x0020]
+        MOV     EAX, [ESP+8]    ; addr
+        MOV     ECX, [ESP+12]   ; size
         INT     0x40
         POP     EBX
-        POP     ESI
-        POP     EDI
         RET

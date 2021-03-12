@@ -2,9 +2,7 @@
 #include "general.h"
 
 void HariMain(){
-    char *buf;
-    api_initmalloc();
-    buf = api_malloc(144 * 164);
+    char buf[144 * 164];
     int win = api_openwin(buf, 144, 164, -1, "color");
     for (int y = 0; y < 128;++y){
         for (int x = 0; x < 128;++x){

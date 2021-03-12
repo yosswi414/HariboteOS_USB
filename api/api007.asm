@@ -1,16 +1,23 @@
 [BITS 32]
-        GLOBAL  api_initmalloc
+        GLOBAL  api_boxfillwin
 
 [SECTION .text]
 
-api_initmalloc: ; void api_initmalloc();
+api_boxfillwin: ; void api_boxfillwin(int win, int x0, int y0, int x1, int y1, int col);
+        PUSH    EDI
+        PUSH    ESI
+        PUSH    EBP
         PUSH    EBX
-        MOV     EDX, 8
-        MOV     EBX, [CS:0x0020]; address of malloc area
-        MOV     EAX, EBX
-        ADD     EAX, 32*1024    ; + 32 KB
-        MOV     ECX, [CS:0x0000]; size of data segment
-        SUB     ECX, EAX
+        MOV     EDX, 7
+        MOV     EBX, [ESP+20]   ; win
+        MOV     EAX, [ESP+24]   ; x0
+        MOV     ECX, [ESP+28]   ; y0
+        MOV     ESI, [ESP+32]   ; x1
+        MOV     EDI, [ESP+36]   ; y1
+        MOV     EBP, [ESP+40]   ; col
         INT     0x40
         POP     EBX
+        POP     EBP
+        POP     ESI
+        POP     EDI
         RET

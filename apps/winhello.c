@@ -1,11 +1,10 @@
 #include "apilib.h"
 #include "general.h"
 
-char buf[150 * 50];
-
 void HariMain(){
     int win;
+    char buf[150 * 50];
     win = api_openwin(buf, 150, 50, -1, "hello1");
-    api_getkey(TRUE);
+    while (api_getkey(TRUE) != '\n') {}
     api_end();
 }

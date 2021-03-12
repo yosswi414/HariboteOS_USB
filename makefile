@@ -33,11 +33,12 @@ ACPI = acpi
 SYS = sysfunc
 
 PROG_CHPT = 28
-PROG_PAGE = 594
+PROG_PAGE = 602
 
-OBJS = $(SYS).obj $(ACPI).obj $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(LIB).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
+OBJS = $(SYS).obj $(ACPI).obj $(FIL).obj $(CON).obj $(MUL).obj $(TIM).obj $(WND).obj $(SHT).obj $(BTP).obj $(FNC).obj $(DSC).obj $(GRP).obj $(INT).obj $(QUE).obj $(KBD).obj $(MOU).obj $(MEM).obj font.obj
 CFLAGS_ARCH = -march=i486 -m32 -fno-pie -fno-builtin -fno-delete-null-pointer-checks -nostdlib
-CFLAGS_BASE = $(CFLAGS_ARCH) -c
+CFLAGS_LIST = -Wa,-adhln -g
+CFLAGS_BASE = $(CFLAGS_ARCH) $(CFLAGS_LIST) -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
 CFLAGS_O0 = -O0 $(CFLAGS_BASE)
 CFLAGS_SW = $(CFLAGS_O2)
@@ -68,7 +69,7 @@ endif
 	$(VBM) convertfromraw -format VDI $(DST) $(VDI)
 	$(VBM) convertfromraw -format VMDK $(DST) usbboot.vmdk
 	$(eval VM_UUID := $(shell $(VBM) list hdds | grep -e "^UUID" | awk '{print $$2}'))
-# $(VBM) storagectl $(VM_NAME) --name $(VM_SCTL) --portcount 1 --remove
+	# $(VBM) storagectl $(VM_NAME) --name $(VM_SCTL) --portcount 1 --remove
 	$(VBM) internalcommands sethduuid $(VDI) $(VM_UUID)
 	# -$(VBM) setextradata $(VM_NAME) "VBoxInternal/Devices/i8254/0/Config/PassthroughSpeaker" 100
 	-$(VBM) storagectl $(VM_NAME) --name $(VM_SCTL) --add sata --controller IntelAHCI --portcount 1 --bootable on
@@ -92,10 +93,10 @@ font.obj: hankaku.txt makefile
 	objcopy -I binary -O elf32-i386 -B i386 --redefine-sym _binary_font_bin_start=ascii font.bin $@
 
 $(KBD).obj : $(KBD).c $(INCLUDE)/device.h makefile
-	$(CC) $(CFLAGS_SW) $(KBD).c -o $@
+	$(CC) $(CFLAGS_SW) $(KBD).c -o $@ > $(KBD).lst
 
 $(MOU).obj : $(MOU).c $(INCLUDE)/device.h makefile
-	$(CC) $(CFLAGS_SW) $(MOU).c -o $@
+	$(CC) $(CFLAGS_SW) $(MOU).c -o $@ > $(MOU).lst
 
 $(BTP).obj : $(BTP).c makefile
 	$(CC) $(CFLAGS_SW) $(BTP).c -o $@ \
@@ -105,7 +106,8 @@ $(BTP).obj : $(BTP).c makefile
 		-D'PROGRESS_MONTH="$(shell date '+%m')"' \
 		-D'PROGRESS_DAY="$(shell date '+%d')"' \
 		-D'PROGRESS_HOUR="$(shell date '+%H')"' \
-		-D'PROGRESS_MIN="$(shell date '+%M')"'
+		-D'PROGRESS_MIN="$(shell date '+%M')"' \
+		> $(BTP).lst
 
 # a_nasm.obj : a_nasm.asm makefile
 # 	$(NASM) -f elf32 -o a_nasm.obj a_nasm.asm -l a_nasm.lst
@@ -114,10 +116,13 @@ $(BTP).obj : $(BTP).c makefile
 	$(NASM) -f elf32 -o $@ $*.asm -l $*.lst
 
 %.obj : %.c $(INCLUDE)/%.h makefile
-	$(CC) $(CFLAGS_SW) $*.c -o $@
+	$(CC) $(CFLAGS_SW) $*.c -o $@ > $*.lst
 
-$(BTP).bin : $(OBJS) $(LKS) makefile
-	ld -Map=$(BTP).map -m elf_i386 -T $(LKS) $(OBJS) -o $(BTP).bin
+%.obj : %.c $(INCLUDE)/$(LIB).h makefile
+	$(CC) $(CFLAGS_SW) $*.c -o $@ > $*.lst
+
+$(BTP).bin : $(OBJS) $(LKS) libmygcc.a makefile
+	ld -Map=$(BTP).map -m elf_i386 -T $(LKS) $(OBJS) libmygcc.a -o $(BTP).bin
 	
 $(HRB) : $(ASH).bin $(BTP).bin makefile
 	cat $(ASH).bin $(BTP).bin > $(HRB)
@@ -127,8 +132,8 @@ FILES = asmhead.asm btp.ld README.md $(INCLUDE)/window.h console.c Sarah_Crowely
 CONTENT = $(CORE) $(FILES)
 
 # APPS = walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb bug3.hrb bug2.hrb bugzero.hrb bug1.hrb hello.hrb a.hrb helloapi.hrb crack1.hrb crack2.hrb crack3.hrb crack4.hrb crack5.hrb
-APPS = color2.hrb color.hrb beepdown.hrb noodle.hrb walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
-OBJS_API = api001.obj api002.obj api003.obj api004.obj api005.obj api006.obj api007.obj api008.obj api009.obj api010.obj api011.obj api012.obj api013.obj api014.obj api015.obj api016.obj api017.obj api018.obj api019.obj api020.obj
+APPS = cat.hrb catipl.hrb prime.hrb color2.hrb color.hrb beepdown.hrb noodle.hrb walk.hrb lines.hrb stars2.hrb stars.hrb star1.hrb winhelo3.hrb winhlo2.hrb winhello.hrb hello5.hrb hello4.hrb hello.hrb helloapi.hrb
+OBJS_API = api026.obj api021.obj api022.obj api023.obj api024.obj api025.obj api001.obj api002.obj api003.obj api004.obj api005.obj api006.obj api007.obj api008.obj api009.obj api010.obj api011.obj api012.obj api013.obj api014.obj api015.obj api016.obj api017.obj api018.obj api019.obj api020.obj
 OBJS_APIS = $(addprefix api/,$(OBJS_API))
 
 REQ = libapi.a libmygcc.a
@@ -136,8 +141,16 @@ REQ = libapi.a libmygcc.a
 libapi.a : $(OBJS_APIS) makefile
 	ar rcs $@ $(OBJS_APIS)
 	# $(CC) $(CFLAGS_ARCH) -o $@ $(OBJS_APIS)
-libmygcc.a : $(LIB).obj makefile
-	ar rcs $@ $(LIB).obj
+
+MLG_012 = mlg_012_1.obj mlg_012_2.obj mlg_012_3.obj mlg_012_4.obj mlg_012_5.obj mlg_012_6.obj mlg_012_7.obj mlg_012_8.obj mlg_012_9.obj
+OBJS_MLG = mlg_001.obj mlg_002.obj mlg_003.obj mlg_004.obj mlg_005.obj mlg_006.obj mlg_007.obj mlg_008.obj mlg_009.obj mlg_010.obj mlg_011.obj $(MLG_012) mlg_013.obj mlg_014.obj mlg_015.obj 
+OBJS_MLGS = $(addprefix lib/,$(OBJS_MLG))
+
+libmygcc.a : $(OBJS_MLGS) makefile
+	ar rcs $@ $(OBJS_MLGS)
+
+# libmygcc.a : $(LIB).obj makefile
+	# ar rcs $@ $(LIB).obj
 	# $(CC) $(CFLAGS_ARCH) -o $@ mylibgcc.obj
 
 # REQ = a_nasm.obj mylibgcc.obj

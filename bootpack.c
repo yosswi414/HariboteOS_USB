@@ -84,7 +84,7 @@ void HariMain(void) {
 
     struct TASK *task_a, *task_cons[CONS_NUM], *task;
 
-    struct CONSOLE* cons;
+    // struct CONSOLE* cons;
 
     int key_to = 0, key_shift = 0, key_ctrl = 0, key_leds = (binfo->leds >> 4) & 7, keycmd_wait = -1;
     struct SHEET* key_win;
@@ -160,7 +160,7 @@ void HariMain(void) {
     key_win = open_console(shtctl, memtotal, cons_height, cons_width);
 
     sheet_slide(sht_back, 0, 0);
-    sheet_slide(key_win, 600, 300);
+    sheet_slide(key_win, 400, 80);
     sheet_slide(sht_mouse, mx, my);
 
     sheet_updown(sht_back, 0);

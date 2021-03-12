@@ -1,10 +1,12 @@
 [BITS 32]
-        GLOBAL  api_beep
+        GLOBAL  api_freetimer
 
 [SECTION .text]
 
-api_beep:       ; void api_beep(int tone);
-        MOV     EDX, 20
-        MOV     EAX, [ESP+4]    ; tone
+api_freetimer:  ; void api_freetimer(int timer);
+        PUSH    EBX
+        MOV     EDX, 19
+        MOV     EBX, [ESP+8]    ; timer
         INT     0x40
+        POP     EBX
         RET

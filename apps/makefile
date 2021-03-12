@@ -10,7 +10,9 @@ CC = gcc -I $(INCLUDE)
 LINKER = ld
 LINKER_L = $(LINKER) $(LIBRARY)
 
-CFLAGS_BASE = -march=i486 -m32 -fno-pie -fno-builtin -fno-delete-null-pointer-checks -nostdlib -c
+CFLAGS_ARCH = -march=i486 -m32 -fno-pie -fno-builtin -fno-delete-null-pointer-checks -nostdlib
+CFLAGS_LIST = -Wa,-adhln -g
+CFLAGS_BASE = $(CFLAGS_ARCH) $(CFLAGS_LIST) -c
 CFLAGS_O2 = -O2 $(CFLAGS_BASE)
 CFLAGS_O0 = -O0 $(CFLAGS_BASE)
 CFLAGS_SW = $(CFLAGS_O2)
@@ -26,7 +28,7 @@ REQ = ../libapi.a ../libmygcc.a
 
 # some illegal operation could be removed by optimization
 %.hrb : %.c $(INCLUDE)/apilib.h $(INCLUDE)/mylibgcc.h app.ld makefile
-	$(CC) $(CFLAGS_SW) -o $*.obj -l $*.lst $*.c
+	$(CC) $(CFLAGS_SW) -Wa,-adhln -g -o $*.obj $*.c > $*.lst
 	$(LINKER) -Map=$*.map -m elf_i386 -T app.ld -o $@ $*.obj $(REQ)
 
 clean :

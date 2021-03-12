@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fifo.h"
+#include "file.h"
 #include "memory.h"
 #include "desctable.h"
 
@@ -23,14 +24,16 @@ struct TSS32 {
 };
 
 struct TASK {
-    int sel, flags;
+    int sel, flags;  // sel: GDT number
     int level, priority;
     struct FIFO32 fifo;
     struct TSS32 tss;
+    struct SEGMENT_DESCRIPTOR ldt[2];
     struct CONSOLE* cons;
     int ds_base, cons_stack;
-
-    struct SEGMENT_DESCRIPTOR ldt[2];
+    struct FILEHANDLE* fhandle;
+    int* fat;
+    char* cmdline;
 };
 
 struct TASKLEVEL {

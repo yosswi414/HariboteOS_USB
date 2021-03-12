@@ -1,10 +1,12 @@
 [BITS 32]
-        GLOBAL  api_getkey
+        GLOBAL  api_closewin
 
 [SECTION .text]
 
-api_getkey:     ; int api_getkey(int mode);
-        MOV     EDX, 15
-        MOV     EAX, [ESP+4]    ; mode
+api_closewin:   ; void api_closewin(int win);
+        PUSH    EBX
+        MOV     EDX, 14
+        MOV     EBX, [ESP+8]    ; win
         INT     0x40
+        POP     EBX
         RET

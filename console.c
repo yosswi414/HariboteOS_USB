@@ -20,10 +20,10 @@ extern char isAcpiAvail;
 
 struct CONSOLE* cons_dprintf;
 char str_dprintf[64];
-#define dprintf(...)                       \
-    if (cons_dprintf) {                    \
-        sprintf(str_dprintf, __VA_ARGS__); \
-        cons_putstr0(cons_dprintf, str_dprintf);   \
+#define dprintf(...)                             \
+    if (cons_dprintf) {                          \
+        sprintf(str_dprintf, __VA_ARGS__);       \
+        cons_putstr0(cons_dprintf, str_dprintf); \
     }
 
 void console_task(struct SHEET* sheet, int memtotal) {
@@ -33,6 +33,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
     // struct FILEINFO* finfo = (struct FILEINFO*)(ADDR_DISKIMG + 0x002600); // unused for now
     int* fat = (int*)memman_alloc_4k(memman, SIZE_FAT * sizeof(int));
     // struct SEGMENT_DESCRIPTOR* gdt = (struct SEGMENT_DESCRIPTOR*)ADDR_GDT; // unused for now
+    struct FILEHANDLE fhandle[MAX_FILES];
 
     file_readfat(fat, (unsigned char*)(ADDR_DISKIMG + 0x000200));
 
@@ -59,6 +60,11 @@ void console_task(struct SHEET* sheet, int memtotal) {
     // allow to access cons from anywhere
     //*((int*)ADDR_CONSOLE) = (int)&cons;
     task->cons = &cons;
+    task->cmdline = cmdline;
+
+    for (int i = 0; i < MAX_FILES; ++i) fhandle[i].buf = NULL;  // mark as not in use
+    task->fhandle = fhandle;
+    task->fat = fat;
 
     sprintf(buf, "bsize: (%d, %d)\n", cons.sht->bxsize, cons.sht->bysize);
     cons_putstr0(task->cons, buf);
@@ -79,7 +85,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
                 dprintf("nc received: [%d](sht:%x)\n", data, cons.sht);
             }
             if (data <= 1 && cons.sht) {  // timer for cursor
-                if (cons.sht){
+                if (cons.sht) {
                     timer_init(cons.timer, &task->fifo, 1 - data);
                     if (cons.cur_c >= 0) cons.cur_c = data ? COL8_FFFFFF : COL8_000000;
                     timer_settime(cons.timer, 50);
@@ -87,14 +93,13 @@ void console_task(struct SHEET* sheet, int memtotal) {
                 }
             }
             if (data == 2) cons.cur_c = COL8_FFFFFF;
-            if (data == 3) { // cursor off
-                if (cons.sht){
+            if (data == 3) {  // cursor off
+                if (cons.sht) {
                     boxfill8(cons.sht->buf, cons.sht->bxsize, COL8_000000,
-                        cons.cur_x * 8 + cons.off_x,
-                        cons.cur_y * 16 + cons.off_y,
-                        (cons.cur_x + 1) * 8 + cons.off_x - 1,
-                        (cons.cur_y + 1) * 16 + cons.off_y - 1
-                    );
+                             cons.cur_x * 8 + cons.off_x,
+                             cons.cur_y * 16 + cons.off_y,
+                             (cons.cur_x + 1) * 8 + cons.off_x - 1,
+                             (cons.cur_y + 1) * 16 + cons.off_y - 1);
                     //putfonts8_sht(sheet, cons.cur_x * 8 + cons.off_x, cons.cur_y * 16 + cons.off_y, COL8_008484, COL8_000000, " ", 1);
                 }
                 cons.cur_c = -1;
@@ -106,7 +111,6 @@ void console_task(struct SHEET* sheet, int memtotal) {
                 cmd_shutdown(&cons, isAcpiAvail);
             }
             if ((data & MASK_SIGNAL) == SIGNAL_KEY) {
-                
                 data &= ~SIGNAL_KEY;
                 if (!cons.sht) dprintf("received: %c\n", data);
                 if (data == '\b') {
@@ -127,7 +131,7 @@ void console_task(struct SHEET* sheet, int memtotal) {
                         dprintf("nc command: [%s]\n", cmdline);
                         cmd_exit(&cons, fat);
                     }
-                    
+
                     cons_putchar(&cons, '>', TRUE);
                 } else {
                     if (!cons.sht) dprintf("* ");
@@ -319,13 +323,13 @@ void cons_runcmd(char* cmdline, struct CONSOLE* cons, int* fat, unsigned int mem
             exit_success = TRUE;
             break;
         }
-        if (!strncmp(cmdline, "cat ", 4)) {
-            if (cons->sht)
-                exit_success = !cmd_cat(cons, fat, cmdline);
-            else
-                exit_success = TRUE;
-            break;
-        }
+        // if (!strncmp(cmdline, "cat ", 4)) {
+        //     if (cons->sht)
+        //         exit_success = !cmd_cat(cons, fat, cmdline);
+        //     else
+        //         exit_success = TRUE;
+        //     break;
+        // }
         if (!strcmp(cmdline, "debug")) {
             if (cons->sht) cmd_debug(cons);
             exit_success = TRUE;
@@ -418,6 +422,9 @@ void cmd_ls(struct CONSOLE* cons) {
     }
 }
 
+// cmd_cat(): since this command has been implemented as an app,
+//            this function is now obsolete.
+/*
 int cmd_cat(struct CONSOLE* cons, int* fat, char* cmdline) {
     struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
     int spcpos;
@@ -445,6 +452,7 @@ int cmd_cat(struct CONSOLE* cons, int* fat, char* cmdline) {
     cons_newline(cons);
     return 0;
 }
+*/
 
 void cmd_dump(struct CONSOLE* cons, int addr) {
     char nullch = '.';
@@ -671,6 +679,13 @@ int cmd_app(struct CONSOLE* cons, int* fat, char* cmdline) {
             // + 4 : means that this is segment number of LDT, not GDT
             start_app(0x1b, 0 * 8 + 4, esp, 1 * 8 + 4, &(task->tss.esp0));
 
+            for (int i = 0; i < MAX_FILES; ++i) {
+                if (task->fhandle[i].buf) {
+                    memman_free_4k(memman, (int)task->fhandle[i].buf, task->fhandle[i].size);
+                    task->fhandle[i].buf = NULL;
+                }
+            }
+
             shtctl = (struct SHTCTL*)*((int*)ADDR_SHTCTL);
             for (int i = 0; i < MAX_SHEETS; ++i) {
                 sht = &(shtctl->sheets0[i]);
@@ -699,6 +714,11 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
     struct FIFO32* sys_fifo = (struct FIFO32*)*((int*)ADDR_FIFO_TASK_A);
     volatile int* reg = &eax + 1;
     char buf[80];
+
+    struct FILEINFO* finfo;
+    struct FILEHANDLE* fh;
+    struct MEMMAN* memman = (struct MEMMAN*)MEMMAN_ADDR;
+
     /* reg: the pointer next to EAX
     * reg[0] : EDI
     * reg[1] : ESI
@@ -712,7 +732,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
     * volatile keyword makes it not to be removed by optimization
     * ref: https://www.uquest.co.jp/embedded/learning/lecture09.html
     */
-
+    int i;
     switch (edx) {
         case 1:
             cons_putchar(cons, eax & 0xff, TRUE);
@@ -786,7 +806,7 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
             break;
         case 15:
             // input a key (break if receives 127 (from bootpack.c))
-            for (int i; i != 127;) {
+            while (i != 127) {
                 io_cli();
                 if (!fifo32_status(&task->fifo)) {
                     if (eax)
@@ -864,6 +884,85 @@ int* hrb_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int 
                 i = io_in8(0x61);
                 io_out8(0x61, (i | 0x03) & 0x0f);
             }
+            break;
+        case 21:
+            // open file
+            i = 0;
+            while (i < MAX_FILES && task->fhandle[i].buf) ++i;
+            reg[7] = 0;
+            if (i < MAX_FILES) {
+                finfo = file_search((char*)ebx + ds_base, (struct FILEINFO*)(ADDR_DISKIMG + 0x002600), 224);
+                if (finfo) {
+                    reg[7] = (int)(fh = &task->fhandle[i]);
+                    fh->buf = (char*)memman_alloc_4k(memman, finfo->size);
+                    fh->size = finfo->size;
+                    fh->pos = 0;
+                    file_loadfile(finfo->clustno, finfo->size, fh->buf, task->fat, (char*)(ADDR_DISKIMG + 0x003e00));
+                }
+            }
+            break;
+        case 22:
+            // close file
+            fh = (struct FILEHANDLE*)eax;
+            memman_free_4k(memman, (int)fh->buf, fh->size);
+            fh->buf = NULL;
+            break;
+        case 23:
+            // seek file
+            fh = (struct FILEHANDLE*)eax;
+            switch(ecx){
+                case 0:
+                    // from head
+                    fh->pos = ebx;
+                    break;
+                case 1:
+                    // from here
+                    fh->pos += ebx;
+                    break;
+                case 2:
+                    // from tail
+                    fh->pos = fh->size + ebx;
+                    break;
+            }
+            fh->pos = clamp(fh->pos, 0, fh->size);
+            break;
+        case 24:
+            // get file size
+            fh = (struct FILEHANDLE*)eax;
+            switch(ecx){
+                case 0:
+                    // size
+                    reg[7] = fh->size;
+                    break;
+                case 1:
+                    // position
+                    reg[7] = fh->pos;
+                    break;
+                case 2:
+                    // position from tail
+                    reg[7] = fh->pos - fh->size;
+                    break;
+            }
+            break;
+        case 25:
+            // read file
+            fh = (struct FILEHANDLE*)eax;
+            i = 0;
+            for (; i < ecx;++i){
+                if (fh->pos == fh->size) break;
+                *((char*)ebx + ds_base + i) = fh->buf[fh->pos];
+                fh->pos++;
+            }
+            reg[7] = i;
+            break;
+        case 26:
+            // get commandline
+            for (i = 0;; ++i) {
+                *((char*)ebx + ds_base + i) = task->cmdline[i];
+                if (!task->cmdline[i]) break;
+                if (i >= ecx) break;
+            }
+            reg[7] = i;
             break;
         default:
             dbg_val[0] = edx;
@@ -958,7 +1057,7 @@ void cmd_testi(struct CONSOLE* cons, int arg) {
     }
 }
 
-void cmd_testc(struct CONSOLE* cons, char* arg){
+void cmd_testc(struct CONSOLE* cons, char* arg) {
     struct FIFO32* fifo = ((struct FIFO32*)0x51e8);
     int n = strlen(arg);
     char data;
@@ -966,8 +1065,8 @@ void cmd_testc(struct CONSOLE* cons, char* arg){
     dprintf("arg:[");
     dprintf(arg);
     dprintf("](%d)\n", n);
-    for (int i = 0; i < n;++i){
-        if(arg[i]=='\\'){
+    for (int i = 0; i < n; ++i) {
+        if (arg[i] == '\\') {
             ++i;
             if (arg[i] == 'n') {
                 data = '\n';
@@ -975,8 +1074,7 @@ void cmd_testc(struct CONSOLE* cons, char* arg){
             if (arg[i] == 't') {
                 data = '\t';
             }
-        }
-        else
+        } else
             data = arg[i];
         fifo32_put(fifo, data | SIGNAL_KEY);
         dprintf("send to fifo: %d | SIG = %d\n", data, data | SIGNAL_KEY);
@@ -1007,7 +1105,7 @@ struct TASK* open_constask(struct SHEET* sht, uint memtotal) {
     dprintf("task:\t%x\n", task);
     if (task) {
         dprintf("L flags:\t");
-        switch(task->flags){
+        switch (task->flags) {
             case TASK_STATE_STOPPED:
                 dprintf("STOPPED\n");
                 break;

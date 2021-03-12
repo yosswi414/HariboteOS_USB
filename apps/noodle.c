@@ -4,10 +4,8 @@
 #include "timer.h"
 
 void HariMain(){
-    char *buf, s[60];
+    char buf[150 * 50], s[60];
     int win, timer, sec = 0, min = 0, hou = 0;
-    api_initmalloc();
-    buf = api_malloc(150 * 50);
     win = api_openwin(buf, 150, 50, -1, "noodle");
     timer = api_alloctimer();
     api_inittimer(timer, 128);

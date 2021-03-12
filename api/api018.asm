@@ -1,12 +1,13 @@
 [BITS 32]
-        GLOBAL  api_freetimer
+        GLOBAL  api_settimer
 
 [SECTION .text]
 
-api_freetimer:  ; void api_freetimer(int timer);
+api_settimer:   ; void api_settimer(int timer, int time);
         PUSH    EBX
-        MOV     EDX, 19
+        MOV     EDX, 18
         MOV     EBX, [ESP+8]    ; timer
+        MOV     EAX, [ESP+12]    ; time
         INT     0x40
         POP     EBX
         RET

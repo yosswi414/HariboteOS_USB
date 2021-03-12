@@ -1,7 +1,7 @@
 #include "apilib.h"
 #include "general.h"
 
-unsigned char rgb2pal(int r, int g, int b, int x, int y){
+inline unsigned char rgb2pal(int r, int g, int b, int x, int y){
     static int table[4] = {3, 1, 0, 2};
     x &= 1;
     y &= 1;
@@ -16,9 +16,7 @@ unsigned char rgb2pal(int r, int g, int b, int x, int y){
 }
 
 void HariMain(){
-    char *buf;
-    api_initmalloc();
-    buf = api_malloc(144 * 164);
+    char buf[144 * 164];
     int win = api_openwin(buf, 144, 164, -1, "color2");
     for (int y = 0; y < 128;++y){
         for (int x = 0; x < 128;++x){

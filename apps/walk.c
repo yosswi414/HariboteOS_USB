@@ -2,10 +2,8 @@
 #include "graphic.h"
 
 void HariMain(){
-    char* buf;
+    char buf[160 * 108];
     int win, x, y;
-    api_initmalloc();
-    buf = api_malloc(160 * 108);
     win = api_openwin(buf, 160, 108, -1, "walk");
     api_boxfillwin(win, 4, 24, 155, 103, COL8_000000);
     x = 9;

@@ -1,14 +1,13 @@
 [BITS 32]
-        GLOBAL  api_free
+        GLOBAL  api_malloc
 
 [SECTION .text]
 
-api_free:       ; void api_free(char *addr, int size);
+api_malloc:     ; char *api_malloc(int size);
         PUSH    EBX
-        MOV     EDX, 10
+        MOV     EDX, 9
         MOV     EBX, [CS:0x0020]
-        MOV     EAX, [ESP+8]    ; addr
-        MOV     ECX, [ESP+12]   ; size
+        MOV     ECX, [ESP+8]    ; size
         INT     0x40
         POP     EBX
         RET
