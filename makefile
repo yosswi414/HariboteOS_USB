@@ -209,6 +209,8 @@ clean :
 	$(DEL) *.so
 	$(DEL) *.a
 	(cd apps; $(MAKE) clean)
+	(cd lib; $(MAKE) clean)
+	(cd api; $(MAKE) clean)
 
 evacuate :
 	git add ./*
