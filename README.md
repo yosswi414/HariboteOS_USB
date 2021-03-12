@@ -24,5 +24,5 @@ You need to install below using `sudo apt install`.
 - z_tools ( `z_tools/makefont.exe` )
 
 # Note
-- The command `exit` works only in VirtualBox environment.
+- The command `shutdown` works only in VirtualBox environment.
 - https://github.com/yosswi414/HariboteOS_USB/blob/master/todo.md#todo
